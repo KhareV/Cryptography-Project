@@ -1,0 +1,41 @@
+{
+  "name": "realtime-chat-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@clerk/nextjs": "^4.29.3",
+    "@gsap/react": "^2.1.2",
+    "@studio-freight/react-lenis": "^0.0.47",
+    "axios": "^1.6.5",
+    "class-variance-authority": "^0.7.0",
+    "clsx": "^2.1.1",
+    "date-fns": "^3.2.0",
+    "emoji-picker-react": "^4.7.12",
+    "framer-motion": "^10.18.0",
+    "gsap": "^3.14.2",
+    "lucide-react": "^0.309.0",
+    "next": "14.0.4",
+    "next-themes": "^0.2.1",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-hot-toast": "^2.4.1",
+    "react-intersection-observer": "^9.5.3",
+    "socket.io-client": "^4.7.4",
+    "split-type": "^0.3.4",
+    "tailwind-merge": "^2.6.0",
+    "zustand": "^4.4.7"
+  },
+  "devDependencies": {
+    "autoprefixer": "^10.4.16",
+    "eslint": "^8.56.0",
+    "eslint-config-next": "14.0.4",
+    "postcss": "^8.4.33",
+    "tailwindcss": "^3.4.1"
+  }
+}
