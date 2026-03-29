@@ -46,14 +46,14 @@ router.get(
     const users = await User.searchUsers(
       search,
       currentUserId,
-      parseInt(limit)
+      parseInt(limit),
     );
 
     sendSuccess(res, 200, "Users found", {
       users,
       count: users.length,
     });
-  })
+  }),
 );
 
 /**
@@ -67,7 +67,7 @@ router.get(
     const user = await User.findById(req.userId)
       .populate(
         "contacts",
-        "username firstName lastName avatar status lastSeen bio"
+        "username firstName lastName avatar status lastSeen bio",
       )
       .lean();
 
@@ -87,7 +87,7 @@ router.get(
       contacts: contactsWithStatus,
       count: contactsWithStatus.length,
     });
-  })
+  }),
 );
 
 /**
@@ -103,7 +103,7 @@ router.get(
 
     const user = await User.findById(userId)
       .select(
-        "username firstName lastName avatar bio status lastSeen createdAt"
+        "username firstName lastName avatar bio status lastSeen createdAt walletAddress",
       )
       .lean();
 
@@ -121,7 +121,7 @@ router.get(
         isOnline,
       },
     });
-  })
+  }),
 );
 
 /**
@@ -178,7 +178,7 @@ router.put(
     const updatedUser = await User.findByIdAndUpdate(
       userId,
       { $set: updates },
-      { new: true, runValidators: true }
+      { new: true, runValidators: true },
     ).select("-contacts");
 
     if (!updatedUser) {
@@ -193,12 +193,15 @@ router.put(
         lastName: updatedUser.lastName,
         avatar: updatedUser.avatar,
         bio: updatedUser.bio,
+        walletAddress: updatedUser.walletAddress,
+        blockchainTxHash: updatedUser.blockchainTxHash,
+        keyFingerprint: updatedUser.keyFingerprint,
         status: updatedUser.status,
         notificationSettings: updatedUser.notificationSettings,
         updatedAt: updatedUser.updatedAt,
       },
     });
-  })
+  }),
 );
 
 /**
@@ -238,7 +241,7 @@ router.post(
         status: contactUser.status,
       },
     });
-  })
+  }),
 );
 
 /**
@@ -257,7 +260,7 @@ router.delete(
     await user.removeContact(contactId);
 
     sendSuccess(res, 200, "Contact removed successfully");
-  })
+  }),
 );
 
 /**
@@ -280,14 +283,14 @@ router.get(
 
     // Filter to only online contacts
     const onlineContacts = user.contacts.filter((contact) =>
-      socketManager.isUserOnline(contact._id.toString())
+      socketManager.isUserOnline(contact._id.toString()),
     );
 
     sendSuccess(res, 200, "Online contacts retrieved", {
       onlineContacts,
       count: onlineContacts.length,
     });
-  })
+  }),
 );
 
 export default router;

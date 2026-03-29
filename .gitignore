@@ -1,0 +1,43 @@
+# OS / editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Secrets / environment files
+
+*.pem
+*.key
+
+# Dependency directories
+**/node_modules/
+**/bower_components/
+
+# Generic build outputs
+dist/
+build/
+coverage/
+
+# Backend
+backend/logs/
+backend/uploads/
+
+# Frontend (Next.js)
+frontend/.next/
+frontend/out/
+frontend/.vercel/
+
+# Blockchain (Hardhat)
+blockchain/artifacts/
+blockchain/cache/
+blockchain/coverage/
+blockchain/typechain/
+blockchain/typechain-types/
+blockchain/ignition/deployments/

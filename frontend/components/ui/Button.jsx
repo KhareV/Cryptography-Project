@@ -7,21 +7,21 @@ import { cn } from "@/lib/utils";
 
 const buttonVariants = {
   primary:
-    "bg-accent text-white hover:bg-accent-hover shadow-soft hover:shadow-medium",
+    "bg-gradient-to-r from-sky-500 via-cyan-500 to-teal-500 text-white shadow-md shadow-cyan-500/25 hover:brightness-105 hover:shadow-lg hover:shadow-cyan-500/25",
   secondary:
-    "bg-background-secondary text-foreground hover:bg-background-tertiary border border-border",
-  ghost: "text-foreground hover:bg-background-secondary",
-  danger: "bg-red-500 text-white hover:bg-red-600",
-  outline:
-    "border-2 border-accent text-accent hover:bg-accent hover:text-white",
+    "bg-background/90 text-foreground hover:bg-background-secondary border border-border/80 shadow-sm backdrop-blur",
+  ghost:
+    "text-foreground hover:bg-background-secondary/80 hover:border-border/70 border border-transparent",
+  danger: "bg-red-500 text-white hover:bg-red-600 shadow-sm shadow-red-500/20",
+  outline: "border border-sky-500/40 text-sky-600 hover:bg-sky-500/10",
 };
 
 const buttonSizes = {
-  sm: "px-3 py-1.5 text-sm",
-  md: "px-4 py-2 text-sm",
-  lg: "px-6 py-3 text-base",
-  xl: "px-8 py-4 text-lg",
-  icon: "p-2",
+  sm: "px-3 py-1.5 text-sm rounded-xl",
+  md: "px-4 py-2.5 text-sm rounded-xl",
+  lg: "px-6 py-3 text-base rounded-2xl",
+  xl: "px-8 py-4 text-lg rounded-2xl",
+  icon: "p-2.5 rounded-xl",
 };
 
 const Button = forwardRef(
@@ -37,22 +37,23 @@ const Button = forwardRef(
       rightIcon,
       ...props
     },
-    ref
+    ref,
   ) => {
     return (
       <motion.button
         ref={ref}
-        whileHover={{ scale: disabled || isLoading ? 1 : 1.02 }}
-        whileTap={{ scale: disabled || isLoading ? 1 : 0.98 }}
+        whileHover={{ scale: disabled || isLoading ? 1 : 1.01 }}
+        whileTap={{ scale: disabled || isLoading ? 1 : 0.99 }}
         className={cn(
           "relative inline-flex items-center justify-center gap-2",
-          "font-medium rounded-xl",
+          "font-semibold tracking-tight",
           "transition-all duration-200 ease-out",
-          "focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2",
+          "active:translate-y-[1px]",
+          "focus:outline-none focus:ring-2 focus:ring-sky-500/30 focus:ring-offset-2",
           "disabled:opacity-50 disabled:cursor-not-allowed",
           buttonVariants[variant],
           buttonSizes[size],
-          className
+          className,
         )}
         disabled={disabled || isLoading}
         {...props}
@@ -60,7 +61,7 @@ const Button = forwardRef(
         {isLoading ? (
           <>
             <Loader2 className="w-4 h-4 animate-spin" />
-            <span>Loading...</span>
+            <span>Please wait</span>
           </>
         ) : (
           <>
@@ -71,7 +72,7 @@ const Button = forwardRef(
         )}
       </motion.button>
     );
-  }
+  },
 );
 
 Button.displayName = "Button";

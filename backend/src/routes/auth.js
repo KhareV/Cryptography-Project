@@ -41,12 +41,15 @@ router.post(
         lastName: user.lastName,
         avatar: user.avatar,
         bio: user.bio,
+        walletAddress: user.walletAddress,
+        blockchainTxHash: user.blockchainTxHash,
+        keyFingerprint: user.keyFingerprint,
         status: user.status,
         lastSeen: user.lastSeen,
         createdAt: user.createdAt,
       },
     });
-  })
+  }),
 );
 
 /**
@@ -60,7 +63,7 @@ router.get(
     const user = await User.findById(req.userId)
       .populate(
         "contacts",
-        "username firstName lastName avatar status lastSeen"
+        "username firstName lastName avatar status lastSeen",
       )
       .lean();
 
@@ -82,6 +85,9 @@ router.get(
             : user.firstName || user.lastName || user.username,
         avatar: user.avatar,
         bio: user.bio,
+        walletAddress: user.walletAddress,
+        blockchainTxHash: user.blockchainTxHash,
+        keyFingerprint: user.keyFingerprint,
         status: user.status,
         lastSeen: user.lastSeen,
         contacts: user.contacts,
@@ -90,7 +96,7 @@ router.get(
         updatedAt: user.updatedAt,
       },
     });
-  })
+  }),
 );
 
 /**
@@ -119,9 +125,12 @@ router.post(
         firstName: updatedUser.firstName,
         lastName: updatedUser.lastName,
         avatar: updatedUser.avatar,
+        walletAddress: updatedUser.walletAddress,
+        blockchainTxHash: updatedUser.blockchainTxHash,
+        keyFingerprint: updatedUser.keyFingerprint,
       },
     });
-  })
+  }),
 );
 
 /**
@@ -143,7 +152,7 @@ router.delete(
     logger.info(`User account deactivated:  ${userId}`);
 
     sendSuccess(res, 200, "Account deactivated successfully");
-  })
+  }),
 );
 
 export default router;

@@ -1,39 +1,44 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
+import { useAuth } from "@clerk/nextjs";
 import { useStore } from "@/store/useStore";
 import { useConversations } from "@/hooks/useConversations";
 import { useMessages } from "@/hooks/useMessages";
-import { useCalling } from "@/hooks/useCalling";
+import { useCall } from "@/context/CallContext";
 import { joinConversation, leaveConversation } from "@/lib/socket";
+import { keyAPI, setAuthToken } from "@/lib/api";
 import Sidebar from "@/components/chat/Sidebar";
 import ChatHeader from "@/components/chat/ChatHeader";
 import MessageList from "@/components/chat/MessageList";
 import MessageInput from "@/components/chat/MessageInput";
 import RightPanel from "@/components/chat/RightPanel";
 import NewChatModal from "@/components/chat/NewChatModal";
-import CallModal from "@/components/chat/CallModal";
-import IncomingCallModal from "@/components/chat/IncomingCallModal";
 
 export default function ConversationPage() {
   const params = useParams();
   const router = useRouter();
   const conversationId = params.conversationId;
+  const { getToken } = useAuth();
 
   const {
     isMobileView,
-    isSidebarOpen,
     isRightPanelOpen,
     isNewChatModalOpen,
     setNewChatModalOpen,
     setActiveConversation,
     isSocketConnected,
-    user,
   } = useStore();
 
   const { activeConversation, markAsRead } = useConversations();
+  const { initiateCall } = useCall();
+  const [keyStatus, setKeyStatus] = useState({
+    loading: false,
+    verified: false,
+    message: "",
+  });
   const {
     messages,
     isLoading,
@@ -44,23 +49,6 @@ export default function ConversationPage() {
     sendMessage,
     handleTyping,
   } = useMessages(conversationId);
-
-  // Call functionality
-  const {
-    activeCall,
-    incomingCall,
-    isCallModalOpen,
-    callStatus,
-    isMuted,
-    isLoading: isCallLoading,
-    localAudioRef,
-    remoteAudioRef,
-    startCall,
-    handleAnswerCall,
-    handleDeclineCall,
-    handleCallEnd,
-    toggleMute,
-  } = useCalling();
 
   // Set active conversation
   useEffect(() => {
@@ -87,10 +75,87 @@ export default function ConversationPage() {
     }
   }, [conversationId, isSocketConnected]);
 
+  useEffect(() => {
+    if (activeConversation?.type && activeConversation.type !== "direct") {
+      setKeyStatus({ loading: false, verified: true, message: "" });
+      return;
+    }
+
+    const targetUserId =
+      activeConversation?.otherParticipant?.id ||
+      activeConversation?.otherParticipant?._id;
+
+    if (!targetUserId) {
+      setKeyStatus({ loading: false, verified: false, message: "" });
+      return;
+    }
+
+    const normalizedTargetUserId = targetUserId.toString();
+    const isMongoObjectId = /^[a-fA-F0-9]{24}$/.test(normalizedTargetUserId);
+
+    if (!isMongoObjectId) {
+      setKeyStatus({
+        loading: false,
+        verified: false,
+        message: "Recipient key status is unavailable for this chat.",
+      });
+      return;
+    }
+
+    let cancelled = false;
+
+    const fetchKeyStatus = async () => {
+      try {
+        setKeyStatus((prev) => ({ ...prev, loading: true }));
+        const token = await getToken();
+        setAuthToken(token);
+
+        const response = await keyAPI.getStatus(normalizedTargetUserId);
+        const status = response.data?.status;
+
+        if (!cancelled) {
+          setKeyStatus({
+            loading: false,
+            verified: Boolean(status?.verified),
+            message: status?.verified
+              ? ""
+              : "Recipient key is not verified on-chain.",
+          });
+        }
+      } catch {
+        if (!cancelled) {
+          setKeyStatus({
+            loading: false,
+            verified: false,
+            message: "Could not verify recipient key on-chain.",
+          });
+        }
+      }
+    };
+
+    fetchKeyStatus();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    activeConversation?.id,
+    activeConversation?.otherParticipant?.id,
+    activeConversation?.otherParticipant?._id,
+    getToken,
+  ]);
+
   // Handle call initiation
   const handleCallUser = () => {
     if (activeConversation?.otherParticipant) {
-      startCall(conversationId, activeConversation.otherParticipant);
+      const peer = activeConversation.otherParticipant;
+      const peerId = peer.id || peer._id;
+      const peerName =
+        `${peer.firstName || ""} ${peer.lastName || ""}`.trim() ||
+        peer.username ||
+        "Unknown";
+
+      initiateCall(peerId, peerName, peer.avatar || "");
     }
   };
 
@@ -103,7 +168,7 @@ export default function ConversationPage() {
       <motion.main
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        className="flex-1 flex flex-col bg-background min-w-0"
+        className="flex-1 flex flex-col bg-background/85 min-w-0 border-l border-border/50"
       >
         {/* Chat Header */}
         <ChatHeader
@@ -111,6 +176,13 @@ export default function ConversationPage() {
           onBack={() => router.push("/chat")}
           showBackButton={isMobileView}
           onCallUser={handleCallUser}
+          blockchainKeyStatus={
+            keyStatus.loading
+              ? "loading"
+              : keyStatus.verified
+                ? "verified"
+                : "unverified"
+          }
         />
 
         {/* Messages */}
@@ -128,6 +200,14 @@ export default function ConversationPage() {
           onTyping={handleTyping}
           isSending={isSending}
           disabled={!activeConversation}
+          verificationWarning={
+            Boolean(activeConversation) &&
+            !keyStatus.loading &&
+            !keyStatus.verified
+          }
+          warningText={
+            keyStatus.message || "Recipient key is not verified on-chain."
+          }
         />
       </motion.main>
 
@@ -140,27 +220,6 @@ export default function ConversationPage() {
       <NewChatModal
         isOpen={isNewChatModalOpen}
         onClose={() => setNewChatModalOpen(false)}
-      />
-
-      {/* Call Modals */}
-      <CallModal
-        isOpen={isCallModalOpen}
-        activeCall={activeCall}
-        callStatus={callStatus}
-        isMuted={isMuted}
-        isLoading={isCallLoading}
-        onEndCall={handleCallEnd}
-        onToggleMute={toggleMute}
-        localAudioRef={localAudioRef}
-        remoteAudioRef={remoteAudioRef}
-        currentUser={user}
-      />
-
-      <IncomingCallModal
-        incomingCall={incomingCall}
-        onAnswer={handleAnswerCall}
-        onDecline={handleDeclineCall}
-        isLoading={isCallLoading}
       />
     </div>
   );

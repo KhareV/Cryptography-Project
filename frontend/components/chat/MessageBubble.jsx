@@ -33,7 +33,7 @@ export default function MessageBubble({ message, isOwn, showAvatar }) {
 
     switch (message.status) {
       case "sent":
-        return <Check className="w-3. 5 h-3.5 text-foreground-secondary" />;
+        return <Check className="w-3.5 h-3.5 text-foreground-secondary" />;
       case "delivered":
         return <CheckCheck className="w-3.5 h-3.5 text-foreground-secondary" />;
       case "read":
@@ -49,8 +49,8 @@ export default function MessageBubble({ message, isOwn, showAvatar }) {
       animate={{ opacity: 1, y: 0, scale: 1 }}
       transition={{ duration: 0.2 }}
       className={cn(
-        "flex gap-2 mb-1 group",
-        isOwn ? "flex-row-reverse" : "flex-row"
+        "flex gap-2 mb-2 group",
+        isOwn ? "flex-row-reverse" : "flex-row",
       )}
       onMouseEnter={() => setShowActions(true)}
       onMouseLeave={() => setShowActions(false)}
@@ -70,7 +70,7 @@ export default function MessageBubble({ message, isOwn, showAvatar }) {
       <div
         className={cn(
           "max-w-[70%] flex flex-col",
-          isOwn ? "items-end" : "items-start"
+          isOwn ? "items-end" : "items-start",
         )}
       >
         {/* Sender Name (for group chats) */}
@@ -83,17 +83,17 @@ export default function MessageBubble({ message, isOwn, showAvatar }) {
         <div
           className={cn(
             "flex items-end gap-1",
-            isOwn ? "flex-row-reverse" : "flex-row"
+            isOwn ? "flex-row-reverse" : "flex-row",
           )}
         >
           {/* Bubble */}
           <div
             className={cn(
-              "relative px-4 py-2 rounded-2xl break-words",
+              "relative px-4 py-2.5 rounded-2xl break-words border shadow-sm",
               isOwn
-                ? "bg-accent text-white rounded-br-md"
-                : "bg-background-tertiary text-foreground rounded-bl-md",
-              message.isOptimistic && "opacity-70"
+                ? "bg-gradient-to-br from-accent to-blue-600 text-white border-transparent rounded-br-md"
+                : "bg-background text-foreground border-border/80 rounded-bl-md",
+              message.isOptimistic && "opacity-70",
             )}
           >
             {/* Reply Preview */}
@@ -103,7 +103,7 @@ export default function MessageBubble({ message, isOwn, showAvatar }) {
                   "mb-2 p-2 rounded-lg text-xs border-l-2",
                   isOwn
                     ? "bg-white/10 border-white/50"
-                    : "bg-background-secondary border-accent"
+                    : "bg-background-secondary border-accent",
                 )}
               >
                 <span className="font-medium">
@@ -119,8 +119,8 @@ export default function MessageBubble({ message, isOwn, showAvatar }) {
                 <img
                   src={message.fileUrl}
                   alt="Image"
-                  className="max-w-[300px] max-h-[400px] rounded-lg object-cover cursor-pointer hover:opacity-90 transition-opacity"
-                  onClick={() => window.open(message.fileUrl, '_blank')}
+                  className="max-w-[300px] max-h-[400px] rounded-xl object-cover cursor-pointer hover:opacity-90 transition-opacity"
+                  onClick={() => window.open(message.fileUrl, "_blank")}
                 />
                 {message.content && (
                   <p className="whitespace-pre-wrap">{message.content}</p>
@@ -134,13 +134,13 @@ export default function MessageBubble({ message, isOwn, showAvatar }) {
             <div
               className={cn(
                 "flex items-center gap-1 mt-1",
-                isOwn ? "justify-end" : "justify-start"
+                isOwn ? "justify-end" : "justify-start",
               )}
             >
               <span
                 className={cn(
                   "text-[10px]",
-                  isOwn ? "text-white/70" : "text-foreground-secondary"
+                  isOwn ? "text-white/70" : "text-foreground-secondary",
                 )}
               >
                 {formatMessageTime(message.createdAt)}
@@ -149,7 +149,7 @@ export default function MessageBubble({ message, isOwn, showAvatar }) {
                 <span
                   className={cn(
                     "text-[10px]",
-                    isOwn ? "text-white/70" : "text-foreground-secondary"
+                    isOwn ? "text-white/70" : "text-foreground-secondary",
                   )}
                 >
                   (edited)
@@ -167,7 +167,7 @@ export default function MessageBubble({ message, isOwn, showAvatar }) {
           >
             <Dropdown
               trigger={
-                <button className="p-1 rounded-full hover:bg-background-secondary text-foreground-secondary">
+                <button className="p-1.5 rounded-full hover:bg-background-secondary text-foreground-secondary border border-transparent hover:border-border">
                   <MoreHorizontal className="w-4 h-4" />
                 </button>
               }

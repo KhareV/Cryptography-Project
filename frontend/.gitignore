@@ -4,9 +4,15 @@ logs
 **/*.backup.*
 **/*.back.*
 
+
 node_modules
 bower_components
 .next
+out
+.vercel
+coverage
+dist
+build
 *.sublime*
 
 psd

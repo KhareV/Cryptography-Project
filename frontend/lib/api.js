@@ -33,7 +33,7 @@ api.interceptors.request.use(
   },
   (error) => {
     return Promise.reject(error);
-  }
+  },
 );
 
 /**
@@ -51,7 +51,7 @@ api.interceptors.response.use(
     }
 
     return Promise.reject(new Error(message));
-  }
+  },
 );
 
 // ============================================
@@ -127,6 +127,63 @@ export const uploadAPI = {
     });
   },
   deleteAvatar: () => api.delete("/upload/avatar"),
+};
+
+// ============================================
+// Call API
+// ============================================
+export const callAPI = {
+  getHistory: () => api.get("/calls/history"),
+};
+
+// ============================================
+// Group API
+// ============================================
+export const groupAPI = {
+  getMyGroups: (page = 1, limit = 20) =>
+    api.get(`/groups/my?page=${page}&limit=${limit}`),
+  discover: (q = "", limit = 20) =>
+    api.get(`/groups/discover?q=${encodeURIComponent(q)}&limit=${limit}`),
+  create: (payload) => api.post("/groups/create", payload),
+  registerOnChain: (groupId, payload) =>
+    api.post(`/groups/${groupId}/register-onchain`, payload),
+  join: (groupId, payload = {}) => api.post(`/groups/${groupId}/join`, payload),
+  getOne: (groupId) => api.get(`/groups/${groupId}`),
+  addMember: (groupId, memberId) =>
+    api.post(`/groups/${groupId}/add-member`, { memberId }),
+  removeMember: (groupId, memberId) =>
+    api.post(`/groups/${groupId}/remove-member`, { memberId }),
+  update: (groupId, payload) => api.put(`/groups/${groupId}/update`, payload),
+  leave: (groupId) => api.post(`/groups/${groupId}/leave`),
+  delete: (groupId) => api.delete(`/groups/${groupId}/delete`),
+  getMessages: (groupId, page = 1, limit = 50) =>
+    api.get(`/groups/${groupId}/messages?page=${page}&limit=${limit}`),
+  sendMessage: (groupId, payload) =>
+    api.post(`/groups/${groupId}/messages`, payload),
+};
+
+// ============================================
+// Blockchain Key API
+// ============================================
+export const keyAPI = {
+  register: (payload) => api.post("/keys/register", payload),
+  getMyStatus: () => api.get("/keys/status/me"),
+  getStatus: (userId) => api.get(`/keys/status/${userId}`),
+};
+
+// ============================================
+// Anchor API
+// ============================================
+export const anchorAPI = {
+  getConversationAnchor: (conversationId) =>
+    api.get(`/anchor/conversation/${conversationId}`),
+  getGroupAnchor: (groupId) => api.get(`/anchor/group/${groupId}`),
+  anchorConversationNow: (conversationId) =>
+    api.post(`/anchor/conversation/${conversationId}/now`),
+  anchorGroupNow: (groupId) => api.post(`/anchor/group/${groupId}/now`),
+  verifyConversation: (conversationId) =>
+    api.get(`/anchor/conversation/${conversationId}/verify`),
+  verifyGroup: (groupId) => api.get(`/anchor/group/${groupId}/verify`),
 };
 
 export default api;

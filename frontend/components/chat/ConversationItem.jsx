@@ -10,11 +10,15 @@ import { cn } from "@/lib/utils";
 
 export default function ConversationItem({ conversation }) {
   const router = useRouter();
-  const { activeConversationId, setActiveConversation } = useStore();
+  const { activeConversationId, setActiveConversation, getMessages } =
+    useStore();
 
   const isActive = activeConversationId === conversation.id;
   const otherUser = conversation.otherParticipant;
   const lastMessage = conversation.lastMessage;
+  const localMessages = getMessages(conversation.id);
+  const localLastMessage =
+    localMessages.length > 0 ? localMessages[localMessages.length - 1] : null;
 
   const handleClick = () => {
     setActiveConversation(conversation.id);
@@ -26,8 +30,17 @@ export default function ConversationItem({ conversation }) {
       otherUser.username
     : "Unknown User";
 
-  const lastMessagePreview = lastMessage?.content
-    ? truncate(lastMessage.content, 40)
+  const previewSource =
+    localLastMessage?.type === "text"
+      ? localLastMessage.content
+      : localLastMessage
+        ? `[${localLastMessage.type || "file"}]`
+        : lastMessage?.content;
+  const previewTimestamp =
+    localLastMessage?.createdAt || lastMessage?.timestamp;
+
+  const lastMessagePreview = previewSource
+    ? truncate(previewSource, 40)
     : "No messages yet";
 
   return (
@@ -36,9 +49,11 @@ export default function ConversationItem({ conversation }) {
       whileTap={{ scale: 0.99 }}
       onClick={handleClick}
       className={cn(
-        "w-full flex items-center gap-3 p-3 rounded-xl transition-colors text-left",
-        "hover:bg-background-secondary",
-        isActive && "bg-background-secondary"
+        "w-full flex items-center gap-3 p-3 rounded-2xl border transition-all text-left mb-2",
+        "hover:bg-background-secondary/70 hover:border-border",
+        isActive
+          ? "bg-primary/10 border-primary/25 shadow-sm"
+          : "bg-background border-border/70",
       )}
     >
       {/* Avatar */}
@@ -55,19 +70,11 @@ export default function ConversationItem({ conversation }) {
       {/* Content */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between mb-1">
-          <h3
-            className={cn(
-              "font-semibold truncate",
-              conversation.unreadCount > 0
-                ? "text-foreground"
-                : "text-foreground"
-            )}
-          >
+          <h3 className="font-semibold truncate text-foreground">
             {displayName}
           </h3>
           <span className="text-xs text-foreground-secondary flex-shrink-0 ml-2">
-            {lastMessage?.timestamp &&
-              formatConversationTime(lastMessage.timestamp)}
+            {previewTimestamp && formatConversationTime(previewTimestamp)}
           </span>
         </div>
 
@@ -77,7 +84,7 @@ export default function ConversationItem({ conversation }) {
               "text-sm truncate",
               conversation.unreadCount > 0
                 ? "text-foreground font-medium"
-                : "text-foreground-secondary"
+                : "text-foreground-secondary",
             )}
           >
             {lastMessagePreview}

@@ -15,12 +15,7 @@ import {
   validateEditMessage,
   validateConversationId,
 } from "../middleware/validators.js";
-import {
-  sendSuccess,
-  sendError,
-  sendPaginated,
-  ApiError,
-} from "../utils/helpers.js";
+import { sendSuccess, sendPaginated, ApiError } from "../utils/helpers.js";
 import Message from "../models/Message.js";
 import Conversation from "../models/Conversation.js";
 import { socketManager } from "../utils/socketManager.js";
@@ -60,7 +55,7 @@ router.get(
       conversationId,
       userId,
       page,
-      limit
+      limit,
     );
 
     // Get total count
@@ -79,12 +74,21 @@ router.get(
       conversationId: msg.conversationId,
       sender: msg.sender,
       content: msg.content,
+      isEncrypted: Boolean(msg.isEncrypted),
+      encryption: msg.encryption || null,
       type: msg.type,
       fileUrl: msg.fileUrl,
       fileMetadata: msg.fileMetadata,
       status: msg.status,
       readBy: msg.readBy,
-      replyTo: msg.replyTo,
+      replyTo: msg.replyTo
+        ? {
+            ...msg.replyTo,
+            content: msg.replyTo.content,
+            isEncrypted: Boolean(msg.replyTo.isEncrypted),
+            encryption: msg.replyTo.encryption || null,
+          }
+        : msg.replyTo,
       reactions: msg.reactions,
       isEdited: msg.isEdited,
       createdAt: msg.createdAt,
@@ -92,7 +96,7 @@ router.get(
     }));
 
     sendPaginated(res, formattedMessages, page, limit, total);
-  })
+  }),
 );
 
 /**
@@ -107,13 +111,20 @@ router.post(
   validateSendMessage,
   asyncHandler(async (req, res) => {
     const { conversationId } = req.params;
-    const { content, type = "text", replyTo, fileUrl, fileMetadata } = req.body;
+    const {
+      content,
+      type = "text",
+      replyTo,
+      fileUrl,
+      fileMetadata,
+      e2ee,
+    } = req.body;
     const userId = req.userId;
 
     // Verify conversation
     const conversation = await Conversation.findById(conversationId).populate(
       "participants",
-      "_id username firstName lastName avatar"
+      "_id username firstName lastName avatar",
     );
 
     if (!conversation) {
@@ -123,6 +134,43 @@ router.post(
     if (!conversation.isParticipant(userId)) {
       throw new ApiError(403, "Not a participant in this conversation");
     }
+
+    const isDirectTextMessage =
+      conversation.type === "direct" &&
+      type === "text" &&
+      typeof content === "string" &&
+      content.trim().length > 0;
+
+    const isE2EEMessage =
+      isDirectTextMessage &&
+      Boolean(e2ee && typeof e2ee === "object") &&
+      e2ee.format === "e2ee-v1";
+
+    if (isDirectTextMessage && !isE2EEMessage) {
+      throw new ApiError(
+        400,
+        "Direct text messages must be end-to-end encrypted",
+      );
+    }
+
+    const encryptionData = isE2EEMessage
+      ? {
+          isEncrypted: true,
+          encryption: {
+            format: "e2ee-v1",
+            algorithm: e2ee.algorithm || "AES-256-GCM",
+            keyExchange: e2ee.keyExchange || "RSA-OAEP-SHA-256",
+            iv: e2ee.iv || "",
+            senderWrappedKey: e2ee.senderWrappedKey || "",
+            recipientWrappedKey: e2ee.recipientWrappedKey || "",
+            senderId: e2ee.senderId || userId.toString(),
+            recipientId: e2ee.recipientId || "",
+            senderFingerprint: e2ee.senderFingerprint || "",
+            recipientFingerprint: e2ee.recipientFingerprint || "",
+            encryptedAt: new Date(),
+          },
+        }
+      : {};
 
     // Create message
     const message = await Message.create({
@@ -134,16 +182,22 @@ router.post(
       fileUrl: fileUrl || null,
       fileMetadata: fileMetadata || null,
       status: "sent",
+      ...encryptionData,
     });
 
     // Populate sender
     await message.populate(
       "sender",
-      "clerkId username firstName lastName avatar"
+      "clerkId username firstName lastName avatar",
     );
 
-    // Update conversation
-    await conversation.updateLastMessage(message);
+    // Update conversation using plaintext preview for direct encrypted messages
+    await conversation.updateLastMessage({
+      sender: userId,
+      type: message.type,
+      content: message.isEncrypted ? "[Encrypted message]" : message.content,
+      createdAt: message.createdAt,
+    });
 
     // Prepare message data
     const messageData = {
@@ -151,12 +205,15 @@ router.post(
       conversationId: conversationId.toString(),
       sender: {
         id: message.sender._id.toString(),
+        clerkId: message.sender.clerkId,
         username: message.sender.username,
         firstName: message.sender.firstName,
         lastName: message.sender.lastName,
         avatar: message.sender.avatar,
       },
       content: message.content,
+      isEncrypted: Boolean(message.isEncrypted),
+      encryption: message.encryption || null,
       type: message.type,
       status: message.status,
       fileUrl: message.fileUrl,
@@ -179,7 +236,7 @@ router.post(
     }
 
     sendSuccess(res, 201, "Message sent", { message: messageData });
-  })
+  }),
 );
 
 /**
@@ -187,7 +244,7 @@ router.post(
  * Mark a specific message as read
  */
 router.put(
-  "/: messageId/read",
+  "/:messageId/read",
   requireAuthentication,
   validateMessageId,
   asyncHandler(async (req, res) => {
@@ -225,7 +282,7 @@ router.put(
     }
 
     sendSuccess(res, 200, "Message marked as read");
-  })
+  }),
 );
 
 /**
@@ -257,12 +314,16 @@ router.put(
       throw new ApiError(400, "Only text messages can be edited");
     }
 
+    if (message.isEncrypted) {
+      throw new ApiError(400, "Encrypted messages cannot be edited");
+    }
+
     // Edit the message
     await message.editContent(content);
 
     // Notify participants
     const conversation = await Conversation.findById(
-      message.conversationId
+      message.conversationId,
     ).populate("participants", "_id");
 
     for (const participant of conversation.participants) {
@@ -284,7 +345,7 @@ router.put(
         updatedAt: message.updatedAt,
       },
     });
-  })
+  }),
 );
 
 /**
@@ -308,7 +369,7 @@ router.delete(
 
     // Get conversation for notifications
     const conversation = await Conversation.findById(
-      message.conversationId
+      message.conversationId,
     ).populate("participants", "_id");
 
     if (!conversation || !conversation.isParticipant(userId)) {
@@ -332,7 +393,7 @@ router.delete(
             messageId: message._id.toString(),
             conversationId: conversation._id.toString(),
             deletedForEveryone: true,
-          }
+          },
         );
       }
     } else {
@@ -341,7 +402,7 @@ router.delete(
     }
 
     sendSuccess(res, 200, "Message deleted");
-  })
+  }),
 );
 
 /**
@@ -365,7 +426,7 @@ router.post(
 
     // Verify user is participant
     const conversation = await Conversation.findById(
-      message.conversationId
+      message.conversationId,
     ).populate("participants", "_id");
 
     if (!conversation || !conversation.isParticipant(userId)) {
@@ -390,7 +451,7 @@ router.post(
     }
 
     sendSuccess(res, 200, emoji ? "Reaction added" : "Reaction removed");
-  })
+  }),
 );
 
 export default router;

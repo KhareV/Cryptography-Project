@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/Dropdown";
 import { cn } from "@/lib/utils";
 
-export function UserMenu({ className }) {
+export function UserMenu({ className, showDetails = true }) {
   const { user } = useUser();
   const { signOut } = useClerk();
   const router = useRouter();
@@ -32,9 +32,9 @@ export function UserMenu({ className }) {
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.98 }}
           className={cn(
-            "flex items-center gap-3 p-2 rounded-xl",
+            "flex items-center gap-3 p-2 rounded-xl max-w-full",
             "hover:bg-background-secondary transition-colors",
-            className
+            className,
           )}
         >
           <Avatar
@@ -44,11 +44,16 @@ export function UserMenu({ className }) {
             showStatus
             isOnline
           />
-          <div className="text-left hidden sm:block">
-            <p className="text-sm font-medium text-foreground">
+          <div
+            className={cn(
+              "text-left hidden sm:block min-w-0",
+              !showDetails && "hidden",
+            )}
+          >
+            <p className="text-sm font-medium text-foreground truncate max-w-[10rem]">
               {user.fullName || user.username}
             </p>
-            <p className="text-xs text-foreground-secondary">
+            <p className="text-xs text-foreground-secondary truncate max-w-[10rem]">
               {user.primaryEmailAddress?.emailAddress}
             </p>
           </div>
@@ -60,14 +65,14 @@ export function UserMenu({ className }) {
 
       <DropdownItem
         icon={<User className="w-4 h-4" />}
-        onClick={() => router.push("/chat? settings=profile")}
+        onClick={() => router.push("/settings?tab=profile")}
       >
         Profile
       </DropdownItem>
 
       <DropdownItem
         icon={<Settings className="w-4 h-4" />}
-        onClick={() => router.push("/chat?settings=preferences")}
+        onClick={() => router.push("/settings?tab=preferences")}
       >
         Settings
       </DropdownItem>

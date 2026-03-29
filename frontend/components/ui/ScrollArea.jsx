@@ -8,10 +8,10 @@ const ScrollArea = forwardRef(({ className, children, ...props }, ref) => {
     <div
       ref={ref}
       className={cn(
-        "overflow-auto scrollbar-thin",
-        "scrollbar-track-transparent scrollbar-thumb-border",
-        "hover:scrollbar-thumb-foreground-secondary",
-        className
+        "overflow-auto overscroll-contain scroll-smooth scrollbar-thin",
+        "scrollbar-track-transparent scrollbar-thumb-border/80",
+        "hover:scrollbar-thumb-foreground-secondary/80",
+        className,
       )}
       {...props}
     >

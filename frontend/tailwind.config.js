@@ -35,8 +35,18 @@ module.exports = {
         // Dark mode overrides handled via CSS variables
       },
       fontFamily: {
-        sans: ["Inter", "SF Pro Display", "system-ui", "sans-serif"],
-        mono: ["SF Mono", "Fira Code", "monospace"],
+        sans: [
+          "var(--font-space-grotesk)",
+          "Space Grotesk",
+          "system-ui",
+          "sans-serif",
+        ],
+        mono: [
+          "var(--font-jetbrains-mono)",
+          "JetBrains Mono",
+          "Fira Code",
+          "monospace",
+        ],
       },
       spacing: {
         18: "4.5rem",
@@ -137,7 +147,7 @@ module.exports = {
         large:
           "0 10px 40px -10px rgba(0, 0, 0, 0.15), 0 20px 50px -10px rgba(0, 0, 0, 0.1)",
         glow: "0 0 40px rgba(0, 132, 255, 0.3)",
-        "glow-lg": "0 0 60px rgba(0, 132, 255, 0.4)",
+        "glow-lg": "0 0 60px rgba(14, 165, 233, 0.35)",
       },
       backdropBlur: {
         xs: "2px",

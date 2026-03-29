@@ -39,7 +39,7 @@ export default function NewChatModal({ isOpen, onClose }) {
         const token = await getToken();
         setAuthToken(token);
 
-        const response = await userAPI.searchUsers(query);
+        const response = await userAPI.searchUsers(query.trim());
         setSearchResults(response.data?.users || []);
       } catch (error) {
         console.error("Search failed:", error);
@@ -48,7 +48,7 @@ export default function NewChatModal({ isOpen, onClose }) {
         setIsSearching(false);
       }
     }, 300),
-    [getToken]
+    [getToken],
   );
 
   // Handle search input change
@@ -100,6 +100,7 @@ export default function NewChatModal({ isOpen, onClose }) {
       title="New Conversation"
       description="Search for users to start a conversation"
       size="md"
+      className="bg-background"
     >
       <div className="space-y-4">
         {/* Search Input */}
@@ -115,13 +116,13 @@ export default function NewChatModal({ isOpen, onClose }) {
         />
 
         {/* Results */}
-        <ScrollArea className="max-h-[300px]">
+        <ScrollArea className="max-h-[320px]">
           {isSearching ? (
             <div className="flex items-center justify-center py-8">
               <Loader2 className="w-6 h-6 text-accent animate-spin" />
             </div>
           ) : searchResults.length > 0 ? (
-            <div className="space-y-2">
+            <div className="space-y-2 pr-1">
               <AnimatePresence>
                 {searchResults.map((user, index) => (
                   <motion.button
@@ -132,7 +133,7 @@ export default function NewChatModal({ isOpen, onClose }) {
                     transition={{ delay: index * 0.05 }}
                     onClick={() => handleStartConversation(user)}
                     disabled={isCreating}
-                    className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-background-secondary transition-colors disabled:opacity-50"
+                    className="w-full flex items-center gap-3 p-3 rounded-2xl border border-border/70 bg-background-secondary/35 hover:bg-background-secondary/65 hover:border-border transition-colors disabled:opacity-50"
                   >
                     <Avatar
                       src={user.avatar}
@@ -142,7 +143,7 @@ export default function NewChatModal({ isOpen, onClose }) {
                       isOnline={user.status === "online"}
                     />
                     <div className="flex-1 text-left">
-                      <p className="font-medium text-foreground">
+                      <p className="font-semibold text-foreground truncate">
                         {user.firstName && user.lastName
                           ? `${user.firstName} ${user.lastName}`
                           : user.username}
@@ -151,7 +152,9 @@ export default function NewChatModal({ isOpen, onClose }) {
                         @{user.username}
                       </p>
                     </div>
-                    <UserPlus className="w-5 h-5 text-foreground-secondary" />
+                    <div className="h-9 w-9 rounded-xl border border-border/70 bg-background-secondary/80 flex items-center justify-center">
+                      <UserPlus className="w-4 h-4 text-foreground-secondary" />
+                    </div>
                   </motion.button>
                 ))}
               </AnimatePresence>

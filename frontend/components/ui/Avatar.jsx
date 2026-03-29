@@ -29,9 +29,9 @@ export function Avatar({
   return (
     <div
       className={cn(
-        "relative inline-block flex-shrink-0",
+        "relative inline-block flex-shrink-0 rounded-full",
         avatarSizes[size],
-        className
+        className,
       )}
     >
       {src && !imageError ? (
@@ -39,15 +39,15 @@ export function Avatar({
           src={src}
           alt={alt || name || "Avatar"}
           fill
-          className="rounded-full object-cover"
+          className="rounded-full object-cover ring-1 ring-border/60 transition-transform duration-300"
           onError={() => setImageError(true)}
         />
       ) : (
         <div
           className={cn(
             "w-full h-full rounded-full flex items-center justify-center",
-            "font-semibold text-white",
-            bgColor
+            "font-semibold text-white ring-1 ring-white/15 shadow-inner",
+            bgColor,
           )}
         >
           {initials}
@@ -55,13 +55,23 @@ export function Avatar({
       )}
 
       {showStatus && (
-        <span
-          className={cn(
-            "absolute bottom-0 right-0 block rounded-full ring-2 ring-background",
-            size === "xs" || size === "sm" ? "w-2 h-2" : "w-3 h-3",
-            isOnline ? "bg-green-500" : "bg-gray-400"
+        <>
+          {isOnline && (
+            <span
+              className={cn(
+                "absolute bottom-0 right-0 block rounded-full bg-emerald-500/35 animate-ping",
+                size === "xs" || size === "sm" ? "w-2 h-2" : "w-3 h-3",
+              )}
+            />
           )}
-        />
+          <span
+            className={cn(
+              "absolute bottom-0 right-0 block rounded-full ring-2 ring-background shadow-sm",
+              size === "xs" || size === "sm" ? "w-2 h-2" : "w-3 h-3",
+              isOnline ? "bg-emerald-500" : "bg-gray-400",
+            )}
+          />
+        </>
       )}
     </div>
   );
@@ -89,7 +99,7 @@ export function AvatarGroup({ avatars, max = 4, size = "sm" }) {
             "flex items-center justify-center rounded-full",
             "bg-background-tertiary text-foreground-secondary",
             "ring-2 ring-background font-medium",
-            avatarSizes[size]
+            avatarSizes[size],
           )}
         >
           +{remaining}

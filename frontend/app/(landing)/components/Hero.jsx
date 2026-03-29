@@ -10,6 +10,7 @@ import { ArrowRight, Play, Zap, CheckCircle2 } from "lucide-react";
 import { useAuth } from "@clerk/nextjs";
 import { Logo } from "@/components/shared/Logo";
 import { ThemeToggle } from "@/components/shared/ThemeToggle";
+import WalletConnectButton from "@/components/blockchain/WalletConnectButton";
 import { Plus_Jakarta_Sans } from "next/font/google";
 
 // Register GSAP plugins
@@ -120,7 +121,7 @@ export default function Hero() {
             duration: 1,
             stagger: 0.1,
           },
-          "-=0.8"
+          "-=0.8",
         )
         .to(
           mockupRef.current,
@@ -131,7 +132,7 @@ export default function Hero() {
             duration: 1.5,
             ease: "expo.out",
           },
-          "-=0.8"
+          "-=0.8",
         );
 
       // Parallax on Scroll
@@ -146,7 +147,7 @@ export default function Hero() {
         },
       });
     },
-    { scope: containerRef }
+    { scope: containerRef },
   );
 
   return (
@@ -168,6 +169,7 @@ export default function Hero() {
         <div className="max-w-7xl mx-auto flex items-center justify-between px-6 py-4">
           <Logo size="md" />
           <div className="flex items-center gap-6">
+            <WalletConnectButton className="hidden md:inline-flex" />
             <ThemeToggle />
             <div className="hidden md:flex items-center gap-4">
               {!isSignedIn && (
@@ -374,7 +376,7 @@ const MessageBubble = ({ align, children, active, delay }) => {
         duration: 0.6,
         delay: 2 + delay,
         ease: "back.out(1.7)",
-      }
+      },
     );
   }, []);
 

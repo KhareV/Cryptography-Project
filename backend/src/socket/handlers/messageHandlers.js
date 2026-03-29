@@ -6,9 +6,21 @@
 import Message from "../../models/Message.js";
 import Conversation from "../../models/Conversation.js";
 import { socketManager } from "../../utils/socketManager.js";
-import { logger, ApiError } from "../../utils/helpers.js";
+import { logger } from "../../utils/helpers.js";
 import { validateSocketMessage } from "../../middleware/validators.js";
 import { handleSocketError } from "../../middleware/errorHandler.js";
+
+const getReplyContent = (replyMessage) => {
+  if (!replyMessage) {
+    return "";
+  }
+
+  if (replyMessage.isEncrypted) {
+    return "[Encrypted message]";
+  }
+
+  return replyMessage.content;
+};
 
 /**
  * Handle sending a new message
@@ -27,13 +39,14 @@ export const handleSendMessage = async (socket, data, callback) => {
       return;
     }
 
-    const { conversationId, content, type, replyTo } = validation.sanitizedData;
+    const { conversationId, content, type, replyTo, e2ee } =
+      validation.sanitizedData;
     const senderId = socket.userId;
 
     // Verify conversation exists and user is participant
     const conversation = await Conversation.findById(conversationId).populate(
       "participants",
-      "_id username firstName lastName avatar status"
+      "_id username firstName lastName avatar status",
     );
 
     if (!conversation) {
@@ -53,6 +66,46 @@ export const handleSendMessage = async (socket, data, callback) => {
       return;
     }
 
+    const isDirectTextMessage =
+      conversation.type === "direct" &&
+      (type || "text") === "text" &&
+      typeof content === "string" &&
+      content.trim().length > 0;
+
+    const isE2EEMessage =
+      isDirectTextMessage &&
+      Boolean(e2ee && typeof e2ee === "object") &&
+      e2ee.format === "e2ee-v1";
+
+    if (isDirectTextMessage && !isE2EEMessage) {
+      if (typeof callback === "function") {
+        callback({
+          success: false,
+          error: "Direct text messages must be end-to-end encrypted",
+        });
+      }
+      return;
+    }
+
+    const encryptionData = isE2EEMessage
+      ? {
+          isEncrypted: true,
+          encryption: {
+            format: "e2ee-v1",
+            algorithm: e2ee.algorithm || "AES-256-GCM",
+            keyExchange: e2ee.keyExchange || "RSA-OAEP-SHA-256",
+            iv: e2ee.iv || "",
+            senderWrappedKey: e2ee.senderWrappedKey || "",
+            recipientWrappedKey: e2ee.recipientWrappedKey || "",
+            senderId: e2ee.senderId || senderId,
+            recipientId: e2ee.recipientId || "",
+            senderFingerprint: e2ee.senderFingerprint || "",
+            recipientFingerprint: e2ee.recipientFingerprint || "",
+            encryptedAt: new Date(),
+          },
+        }
+      : {};
+
     // Create the message
     const message = await Message.create({
       conversationId,
@@ -63,19 +116,20 @@ export const handleSendMessage = async (socket, data, callback) => {
       status: "sent",
       fileUrl: data.fileUrl || null,
       fileMetadata: data.fileMetadata || null,
+      ...encryptionData,
     });
 
     // Populate sender information
     await message.populate(
       "sender",
-      "clerkId username firstName lastName avatar"
+      "clerkId username firstName lastName avatar",
     );
 
     // Populate reply if exists
     if (message.replyTo) {
       await message.populate({
         path: "replyTo",
-        select: "content sender type",
+        select: "content sender type isEncrypted encryption",
         populate: {
           path: "sender",
           select: "username firstName lastName",
@@ -83,8 +137,13 @@ export const handleSendMessage = async (socket, data, callback) => {
       });
     }
 
-    // Update conversation with last message
-    await conversation.updateLastMessage(message);
+    // Update conversation preview using plaintext for encrypted direct messages.
+    await conversation.updateLastMessage({
+      sender: senderId,
+      type: message.type,
+      content: message.isEncrypted ? "[Encrypted message]" : message.content,
+      createdAt: message.createdAt,
+    });
 
     // Prepare message for emission
     const messageData = {
@@ -99,6 +158,8 @@ export const handleSendMessage = async (socket, data, callback) => {
         avatar: message.sender.avatar,
       },
       content: message.content,
+      isEncrypted: Boolean(message.isEncrypted),
+      encryption: message.encryption || null,
       type: message.type,
       status: message.status,
       fileUrl: message.fileUrl,
@@ -106,7 +167,7 @@ export const handleSendMessage = async (socket, data, callback) => {
       replyTo: message.replyTo
         ? {
             id: message.replyTo._id.toString(),
-            content: message.replyTo.content,
+            content: getReplyContent(message.replyTo),
             sender: message.replyTo.sender,
             type: message.replyTo.type,
           }
@@ -146,7 +207,10 @@ export const handleSendMessage = async (socket, data, callback) => {
           lastMessage: {
             content:
               message.type === "text"
-                ? message.content.substring(0, 100)
+                ? (message.isEncrypted
+                    ? "[Encrypted message]"
+                    : message.content
+                  ).substring(0, 100)
                 : `[${message.type}]`,
             sender: messageData.sender,
             timestamp: message.createdAt.toISOString(),
@@ -158,7 +222,7 @@ export const handleSendMessage = async (socket, data, callback) => {
     }
 
     logger.debug(
-      `Message sent in conversation ${conversationId} by ${senderId}`
+      `Message sent in conversation ${conversationId} by ${senderId}`,
     );
   } catch (error) {
     handleSocketError(socket, error, "message:send");
@@ -261,7 +325,7 @@ export const handleMarkConversationRead = async (socket, data, callback) => {
     const unreadMessages = await Message.find({
       conversationId,
       sender: { $ne: userId },
-      "readBy. user": { $ne: userId },
+      "readBy.user": { $ne: userId },
       isDeleted: false,
     });
 
@@ -334,7 +398,7 @@ export const handleDeleteMessage = async (socket, data, callback) => {
 
     // Get conversation to notify participants
     const conversation = await Conversation.findById(
-      message.conversationId
+      message.conversationId,
     ).populate("participants", "_id");
 
     if (deleteForEveryone) {
@@ -413,7 +477,7 @@ export const handleMessageReaction = async (socket, data, callback) => {
 
     // Get conversation to notify participants
     const conversation = await Conversation.findById(
-      message.conversationId
+      message.conversationId,
     ).populate("participants", "_id");
 
     // Notify all participants of the reaction

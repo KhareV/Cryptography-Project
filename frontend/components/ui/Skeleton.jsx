@@ -6,8 +6,9 @@ export function Skeleton({ className, ...props }) {
   return (
     <div
       className={cn(
-        "animate-pulse rounded-lg bg-background-tertiary",
-        className
+        "relative overflow-hidden rounded-xl bg-background-secondary/80",
+        "before:absolute before:inset-0 before:bg-shimmer before:bg-[length:200%_100%] before:animate-shimmer",
+        className,
       )}
       {...props}
     />
@@ -40,7 +41,12 @@ export function SkeletonAvatar({ size = "md", className }) {
 
 export function SkeletonConversationItem({ className }) {
   return (
-    <div className={cn("flex items-center gap-3 p-3", className)}>
+    <div
+      className={cn(
+        "flex items-center gap-3 rounded-2xl border border-border/70 p-3",
+        className,
+      )}
+    >
       <SkeletonAvatar size="lg" />
       <div className="flex-1 space-y-2">
         <Skeleton className="h-4 w-1/2" />
@@ -57,7 +63,7 @@ export function SkeletonMessage({ isOwn = false, className }) {
       className={cn(
         "flex gap-2 mb-4",
         isOwn ? "flex-row-reverse" : "flex-row",
-        className
+        className,
       )}
     >
       {!isOwn && <SkeletonAvatar size="sm" />}

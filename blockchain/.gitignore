@@ -1,0 +1,15 @@
+
+
+# Dependencies
+node_modules/
+
+# Hardhat outputs
+artifacts/
+cache/
+coverage/
+typechain/
+typechain-types/
+ignition/deployments/
+
+# Misc
+*.log

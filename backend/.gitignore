@@ -4,9 +4,14 @@ logs
 **/*.backup.*
 **/*.back.*
 
+
 node_modules
 .next
 bower_components
+coverage
+dist
+build
+uploads
 
 *.sublime*
 

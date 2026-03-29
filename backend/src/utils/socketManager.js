@@ -22,6 +22,9 @@ class SocketManager {
     // Active calls: callId -> call data
     this.activeCalls = new Map();
 
+    // Users currently in an active/ringing call
+    this.inCallUsers = new Set();
+
     // IO instance reference
     this.io = null;
   }
@@ -63,7 +66,7 @@ class SocketManager {
     logger.debug(
       `User ${userIdStr} now has ${
         this.userSockets.get(userIdStr).size
-      } active connections`
+      } active connections`,
     );
   }
 
@@ -148,7 +151,9 @@ class SocketManager {
     return {
       totalConnections: this.sockets.size,
       totalUsers: this.userSockets.size,
+      totalUsersInCall: this.inCallUsers.size,
       onlineUsers: this.getOnlineUsers(),
+      inCallUsers: this.getInCallUsers(),
     };
   }
 
@@ -193,6 +198,19 @@ class SocketManager {
   }
 
   /**
+   * Emit event to a group room
+   * @param {string} groupId - Group ID
+   * @param {string} event - Event name
+   * @param {Object} data - Event payload
+   */
+  emitToGroup(groupId, event, data) {
+    if (this.io) {
+      this.io.to(`group:${groupId}`).emit(event, data);
+      logger.debug(`Emitted "${event}" to group ${groupId}`);
+    }
+  }
+
+  /**
    * Join a socket to a conversation room
    * @param {string} socketId - Socket ID
    * @param {string} conversationId - Conversation ID
@@ -215,6 +233,32 @@ class SocketManager {
     if (socket) {
       socket.leave(`conversation:${conversationId}`);
       logger.debug(`Socket ${socketId} left conversation ${conversationId}`);
+    }
+  }
+
+  /**
+   * Join a socket to a group room
+   * @param {string} socketId - Socket ID
+   * @param {string} groupId - Group ID
+   */
+  joinGroup(socketId, groupId) {
+    const socket = this.sockets.get(socketId);
+    if (socket) {
+      socket.join(`group:${groupId}`);
+      logger.debug(`Socket ${socketId} joined group ${groupId}`);
+    }
+  }
+
+  /**
+   * Remove a socket from a group room
+   * @param {string} socketId - Socket ID
+   * @param {string} groupId - Group ID
+   */
+  leaveGroup(socketId, groupId) {
+    const socket = this.sockets.get(socketId);
+    if (socket) {
+      socket.leave(`group:${groupId}`);
+      logger.debug(`Socket ${socketId} left group ${groupId}`);
     }
   }
 
@@ -298,7 +342,7 @@ class SocketManager {
     });
 
     logger.debug(
-      `Broadcast ${event} for user ${userId} to ${contactIds.length} contacts`
+      `Broadcast ${event} for user ${userId} to ${contactIds.length} contacts`,
     );
   }
 
@@ -318,6 +362,7 @@ class SocketManager {
     this.sockets.clear();
     this.typingIndicators.clear();
     this.activeCalls.clear();
+    this.inCallUsers.clear();
 
     logger.info("Socket manager cleared");
   }
@@ -366,8 +411,57 @@ class SocketManager {
   getUserActiveCalls(userId) {
     const userIdStr = userId.toString();
     return this.getActiveCalls().filter(
-      (call) => call.caller.id === userIdStr || call.recipient.id === userIdStr
+      (call) =>
+        call.caller?.id === userIdStr ||
+        call.recipient?.id === userIdStr ||
+        call.initiatorId === userIdStr ||
+        call.receiverId === userIdStr,
     );
+  }
+
+  /**
+   * Get all users currently marked in-call
+   * @returns {Array<string>} Array of user IDs
+   */
+  getInCallUsers() {
+    return Array.from(this.inCallUsers);
+  }
+
+  /**
+   * Check if a specific user is currently in-call
+   * @param {string} userId - User ID
+   * @returns {boolean} Whether user is in a call
+   */
+  isUserInCall(userId) {
+    return this.inCallUsers.has(userId.toString());
+  }
+
+  /**
+   * Recompute a user's call presence from active call map
+   * @param {string} userId - User ID
+   * @returns {{ changed: boolean, isInCall: boolean }}
+   */
+  refreshUserCallState(userId) {
+    const userIdStr = userId.toString();
+    const activeStatuses = new Set(["ringing", "active"]);
+
+    const isInCall = this.getUserActiveCalls(userIdStr).some((call) =>
+      activeStatuses.has(call.status),
+    );
+
+    const wasInCall = this.inCallUsers.has(userIdStr);
+
+    if (isInCall && !wasInCall) {
+      this.inCallUsers.add(userIdStr);
+      return { changed: true, isInCall: true };
+    }
+
+    if (!isInCall && wasInCall) {
+      this.inCallUsers.delete(userIdStr);
+      return { changed: true, isInCall: false };
+    }
+
+    return { changed: false, isInCall };
   }
 }
 

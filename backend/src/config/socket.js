@@ -82,6 +82,32 @@ export const SOCKET_EVENTS = {
   USER_ONLINE: "user:online",
   USER_OFFLINE: "user:offline",
   USER_STATUS: "user:status",
+  USER_IN_CALL: "user:in-call",
+  USER_CALL_ENDED: "user:call-ended",
+
+  // Call events
+  CALL_INITIATE: "call:initiate",
+  CALL_INCOMING: "call:incoming",
+  CALL_ACCEPT: "call:accept",
+  CALL_ACCEPTED: "call:accepted",
+  CALL_REJECT: "call:reject",
+  CALL_REJECTED: "call:rejected",
+  CALL_END: "call:end",
+  CALL_ENDED: "call:ended",
+  CALL_USER_OFFLINE: "call:user-offline",
+  CALL_ICE_CANDIDATE: "call:ice-candidate",
+  CALL_OFFER: "call:offer",
+  CALL_ANSWER: "call:answer",
+
+  // Group events
+  GROUP_CREATE: "group:create",
+  GROUP_JOIN: "group:join",
+  GROUP_LEAVE: "group:leave",
+  GROUP_MESSAGE_SEND: "group:message:send",
+  GROUP_MESSAGE_NEW: "group:message:new",
+  GROUP_MEMBER_ADDED: "group:member:added",
+  GROUP_MEMBER_REMOVED: "group:member:removed",
+  GROUP_UPDATED: "group:updated",
 
   // System events
   CONNECTED: "connected",
@@ -95,6 +121,7 @@ export const SOCKET_EVENTS = {
 export const getRoomNames = {
   user: (userId) => `user:${userId}`,
   conversation: (conversationId) => `conversation:${conversationId}`,
+  group: (groupId) => `group:${groupId}`,
 };
 
 /**
@@ -139,7 +166,7 @@ export const broadcastToRoom = (
   roomName,
   event,
   data,
-  excludeSocketId = null
+  excludeSocketId = null,
 ) => {
   if (excludeSocketId) {
     io.to(roomName).except(excludeSocketId).emit(event, data);

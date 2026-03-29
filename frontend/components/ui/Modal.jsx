@@ -11,7 +11,7 @@ const overlayVariants = {
 };
 
 const modalVariants = {
-  hidden: { opacity: 0, scale: 0.95, y: 20 },
+  hidden: { opacity: 0, scale: 0.96, y: 16 },
   visible: { opacity: 1, scale: 1, y: 0 },
 };
 
@@ -70,7 +70,7 @@ export function Modal({
             exit="hidden"
             variants={overlayVariants}
             transition={{ duration: 0.2 }}
-            className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm"
+            className="fixed inset-0 z-50 bg-slate-950/45 backdrop-blur-sm"
             onClick={closeOnOverlayClick ? onClose : undefined}
           />
 
@@ -83,17 +83,17 @@ export function Modal({
               variants={modalVariants}
               transition={{ duration: 0.2, ease: "easeOut" }}
               className={cn(
-                "w-full rounded-2xl",
-                "bg-background border border-border",
-                "shadow-large",
+                "w-full rounded-3xl overflow-hidden",
+                "bg-background border border-border/80",
+                "shadow-2xl shadow-slate-900/25",
                 sizeClasses[size],
-                className
+                className,
               )}
               onClick={(e) => e.stopPropagation()}
             >
               {/* Header */}
               {(title || showCloseButton) && (
-                <div className="flex items-center justify-between p-4 border-b border-border">
+                <div className="flex items-center justify-between p-5 border-b border-border/70 bg-background-secondary/70">
                   <div>
                     {title && (
                       <h2 className="text-lg font-semibold text-foreground">
@@ -110,7 +110,7 @@ export function Modal({
                   {showCloseButton && (
                     <button
                       onClick={onClose}
-                      className="p-2 rounded-lg text-foreground-secondary hover:text-foreground hover:bg-background-secondary transition-colors"
+                      className="p-2 rounded-xl text-foreground-secondary hover:text-foreground hover:bg-background/80 transition-colors"
                     >
                       <X className="w-5 h-5" />
                     </button>
@@ -119,7 +119,7 @@ export function Modal({
               )}
 
               {/* Content */}
-              <div className="p-4">{children}</div>
+              <div className="p-5">{children}</div>
             </motion.div>
           </div>
         </Fragment>
@@ -133,7 +133,7 @@ export function ModalFooter({ children, className }) {
     <div
       className={cn(
         "flex items-center justify-end gap-3 pt-4 mt-4 border-t border-border",
-        className
+        className,
       )}
     >
       {children}

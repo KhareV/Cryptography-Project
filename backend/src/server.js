@@ -35,6 +35,13 @@ import userRoutes from "./routes/users.js";
 import conversationRoutes from "./routes/conversations.js";
 import messageRoutes from "./routes/messages.js";
 import uploadRoutes from "./routes/upload.js";
+import callRoutes from "./routes/calls.js";
+import groupRoutes from "./routes/groups.js";
+import keyRoutes from "./routes/keys.js";
+import anchorRoutes from "./routes/anchor.js";
+
+// Jobs
+import "./jobs/anchorJob.js";
 
 // Utils
 import { logger } from "./utils/helpers.js";
@@ -58,7 +65,7 @@ const validateEnvironment = () => {
 
   if (missing.length > 0) {
     logger.error(
-      `Missing required environment variables: ${missing.join(", ")}`
+      `Missing required environment variables: ${missing.join(", ")}`,
     );
     process.exit(1);
   }
@@ -84,7 +91,7 @@ const createApp = () => {
     helmet({
       crossOriginResourcePolicy: { policy: "cross-origin" },
       crossOriginEmbedderPolicy: false,
-    })
+    }),
   );
 
   // CORS configuration
@@ -108,7 +115,7 @@ const createApp = () => {
       credentials: true,
       methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
       allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
-    })
+    }),
   );
 
   // Compression
@@ -128,7 +135,7 @@ const createApp = () => {
       const duration = Date.now() - start;
       if (req.path !== "/health" && req.path !== "/api/health") {
         logger.debug(
-          `${req.method} ${req.path} ${res.statusCode} ${duration}ms`
+          `${req.method} ${req.path} ${res.statusCode} ${duration}ms`,
         );
       }
     });
@@ -173,6 +180,10 @@ const createApp = () => {
   app.use("/api/conversations", conversationRoutes);
   app.use("/api/messages", messageRoutes);
   app.use("/api/upload", uploadRoutes);
+  app.use("/api/calls", callRoutes);
+  app.use("/api/groups", groupRoutes);
+  app.use("/api/keys", keyRoutes);
+  app.use("/api/anchor", anchorRoutes);
 
   // =====================================================
   // Error Handling

@@ -14,6 +14,8 @@ export default function MessageInput({
   onTyping,
   isSending,
   disabled,
+  verificationWarning = false,
+  warningText = "Recipient key is not verified on-chain yet.",
 }) {
   const [message, setMessage] = useState("");
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -32,7 +34,7 @@ export default function MessageInput({
       setMessage(e.target.value);
       onTyping?.();
     },
-    [onTyping]
+    [onTyping],
   );
 
   // Handle send
@@ -94,7 +96,7 @@ export default function MessageInput({
         handleSend();
       }
     },
-    [handleSend]
+    [handleSend],
   );
 
   // Handle emoji select
@@ -117,7 +119,13 @@ export default function MessageInput({
   }, []);
 
   return (
-    <div className="relative border-t border-border bg-background px-4 py-3">
+    <div className="relative border-t border-border/70 bg-background/95 backdrop-blur px-4 py-3">
+      {verificationWarning && (
+        <div className="mb-3 rounded-xl border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
+          {warningText}
+        </div>
+      )}
+
       {/* Attachments Preview */}
       <AnimatePresence>
         {attachments.length > 0 && (
@@ -130,7 +138,7 @@ export default function MessageInput({
             {attachments.map((file, index) => (
               <div
                 key={index}
-                className="relative flex-shrink-0 w-20 h-20 rounded-lg bg-background-secondary border border-border overflow-hidden group"
+                className="relative flex-shrink-0 w-20 h-20 rounded-xl bg-background-secondary border border-border/80 overflow-hidden group shadow-sm"
               >
                 {file.type.startsWith("image/") ? (
                   <img
@@ -156,11 +164,12 @@ export default function MessageInput({
       </AnimatePresence>
 
       {/* Input Area */}
-      <div className="flex items-end gap-2">
+      <div className="flex items-end gap-2 rounded-2xl border border-border/80 bg-background-secondary/60 p-2">
         {/* Attachment Button */}
         <Button
           variant="ghost"
           size="icon"
+          className="h-10 w-10"
           onClick={() => fileInputRef.current?.click()}
           disabled={disabled}
         >
@@ -170,7 +179,7 @@ export default function MessageInput({
           ref={fileInputRef}
           type="file"
           multiple
-          accept="image/*,.pdf,. doc,.docx"
+          accept="image/*,.pdf,.doc,.docx"
           className="hidden"
           onChange={handleFileSelect}
         />
@@ -180,6 +189,7 @@ export default function MessageInput({
           <Button
             variant="ghost"
             size="icon"
+            className="h-10 w-10"
             onClick={() => setShowEmojiPicker(!showEmojiPicker)}
             disabled={disabled}
           >
@@ -219,12 +229,12 @@ export default function MessageInput({
             rows={1}
             className={cn(
               "w-full px-4 py-2.5 rounded-2xl resize-none",
-              "bg-background-secondary border border-border",
+              "bg-background border border-border/80",
               "text-foreground placeholder:text-foreground-secondary",
-              "focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent",
+              "focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent/50",
               "disabled:opacity-50 disabled:cursor-not-allowed",
               "transition-all duration-200",
-              "max-h-[150px] overflow-y-auto"
+              "max-h-[150px] overflow-y-auto",
             )}
           />
         </div>

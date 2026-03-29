@@ -1,51 +1,150 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useLayoutEffect } from "react";
+import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { ChevronDown, Check } from "lucide-react";
+import { Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export function Dropdown({ trigger, children, align = "left", className }) {
+export function Dropdown({
+  trigger,
+  children,
+  align = "left",
+  className,
+  fullWidth = false,
+}) {
   const [isOpen, setIsOpen] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
+  const [position, setPosition] = useState({
+    top: 0,
+    left: 0,
+    openUpward: false,
+  });
   const dropdownRef = useRef(null);
+  const triggerRef = useRef(null);
+  const menuRef = useRef(null);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  const updatePosition = () => {
+    const triggerElement = triggerRef.current;
+    const menuElement = menuRef.current;
+    if (!triggerElement || !menuElement) return;
+
+    const triggerRect = triggerElement.getBoundingClientRect();
+    const menuRect = menuElement.getBoundingClientRect();
+    const margin = 8;
+
+    let left = triggerRect.left;
+    if (align === "right") {
+      left = triggerRect.right - menuRect.width;
+    } else if (align === "center") {
+      left = triggerRect.left + triggerRect.width / 2 - menuRect.width / 2;
+    }
+
+    left = Math.max(
+      margin,
+      Math.min(left, window.innerWidth - menuRect.width - margin),
+    );
+
+    const openDownTop = triggerRect.bottom + margin;
+    const openUpTop = triggerRect.top - menuRect.height - margin;
+    const canOpenDown =
+      openDownTop + menuRect.height <= window.innerHeight - margin;
+    const canOpenUp = openUpTop >= margin;
+    const openUpward = !canOpenDown && canOpenUp;
+
+    setPosition({
+      top: openUpward ? openUpTop : openDownTop,
+      left,
+      openUpward,
+    });
+  };
+
+  useLayoutEffect(() => {
+    if (!isOpen) return;
+
+    updatePosition();
+
+    const handleReposition = () => updatePosition();
+    window.addEventListener("resize", handleReposition);
+    window.addEventListener("scroll", handleReposition, true);
+
+    return () => {
+      window.removeEventListener("resize", handleReposition);
+      window.removeEventListener("scroll", handleReposition, true);
+    };
+  }, [isOpen, align]);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+      const target = event.target;
+      const clickedTrigger = dropdownRef.current?.contains(target);
+      const clickedMenu = menuRef.current?.contains(target);
+
+      if (!clickedTrigger && !clickedMenu) {
+        setIsOpen(false);
+      }
+    };
+
+    const handleEscape = (event) => {
+      if (event.key === "Escape") {
         setIsOpen(false);
       }
     };
 
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleEscape);
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleEscape);
+    };
   }, []);
 
   return (
-    <div ref={dropdownRef} className="relative inline-block">
-      <div onClick={() => setIsOpen(!isOpen)}>{trigger}</div>
+    <div
+      ref={dropdownRef}
+      className={cn(
+        "relative max-w-full",
+        fullWidth ? "flex w-full" : "inline-flex",
+      )}
+    >
+      <div
+        ref={triggerRef}
+        className={cn(fullWidth && "w-full")}
+        onClick={() => setIsOpen((prev) => !prev)}
+      >
+        {trigger}
+      </div>
 
-      <AnimatePresence>
-        {isOpen && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            transition={{ duration: 0.15 }}
-            className={cn(
-              "absolute z-50 mt-2 min-w-[180px]",
-              "bg-background border border-border rounded-xl",
-              "shadow-large overflow-hidden",
-              align === "left" && "left-0",
-              align === "right" && "right-0",
-              align === "center" && "left-1/2 -translate-x-1/2",
-              className
+      {isMounted &&
+        createPortal(
+          <AnimatePresence>
+            {isOpen && (
+              <motion.div
+                ref={menuRef}
+                initial={{ opacity: 0, y: position.openUpward ? 8 : -8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: position.openUpward ? 8 : -8 }}
+                transition={{ duration: 0.15 }}
+                style={{ top: position.top, left: position.left }}
+                className={cn(
+                  "fixed z-[120] min-w-[210px] max-w-[calc(100vw-1rem)]",
+                  "bg-background/92 backdrop-blur-xl border border-border/75 rounded-2xl",
+                  "shadow-xl shadow-slate-900/15 overflow-hidden",
+                  className,
+                )}
+                onClick={() => setIsOpen(false)}
+              >
+                {children}
+              </motion.div>
             )}
-            onClick={() => setIsOpen(false)}
-          >
-            {children}
-          </motion.div>
+          </AnimatePresence>,
+          document.body,
         )}
-      </AnimatePresence>
     </div>
   );
 }
@@ -64,17 +163,24 @@ export function DropdownItem({
       onClick={onClick}
       disabled={disabled}
       className={cn(
-        "w-full flex items-center gap-3 px-4 py-2.5 text-left",
+        "w-full flex items-center gap-3 px-4 py-2.5 text-left rounded-none",
         "text-sm transition-colors",
-        "hover:bg-background-secondary",
+        "hover:bg-background-secondary/75",
         "disabled:opacity-50 disabled:cursor-not-allowed",
-        isActive && "bg-background-secondary",
-        isDestructive && "text-red-500 hover:bg-red-50 dark:hover:bg-red-950",
-        className
+        isActive && "bg-background-secondary/75",
+        isDestructive && "text-red-500 hover:bg-red-500/10",
+        className,
       )}
     >
       {icon && (
-        <span className="w-4 h-4 text-foreground-secondary">{icon}</span>
+        <span
+          className={cn(
+            "w-4 h-4 text-foreground-secondary",
+            isDestructive && "text-red-500",
+          )}
+        >
+          {icon}
+        </span>
       )}
       <span className="flex-1">{children}</span>
       {isActive && <Check className="w-4 h-4 text-accent" />}
@@ -83,7 +189,7 @@ export function DropdownItem({
 }
 
 export function DropdownSeparator() {
-  return <div className="h-px bg-border my-1" />;
+  return <div className="h-px bg-border/70 my-1" />;
 }
 
 export function DropdownLabel({ children, className }) {
@@ -91,7 +197,7 @@ export function DropdownLabel({ children, className }) {
     <div
       className={cn(
         "px-4 py-2 text-xs font-semibold text-foreground-secondary uppercase tracking-wide",
-        className
+        className,
       )}
     >
       {children}

@@ -20,7 +20,7 @@ export default function ConversationList({ conversations, isLoading }) {
   if (conversations.length === 0) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
-        <div className="w-16 h-16 rounded-full bg-background-secondary flex items-center justify-center mb-4">
+        <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-accent to-blue-600 shadow-lg shadow-accent/20 flex items-center justify-center mb-4">
           <MessageSquare className="w-8 h-8 text-foreground-secondary" />
         </div>
         <h3 className="font-medium text-foreground mb-2">
@@ -35,7 +35,7 @@ export default function ConversationList({ conversations, isLoading }) {
 
   return (
     <ScrollArea className="h-full">
-      <div className="p-2">
+      <div className="p-3">
         <AnimatePresence initial={false}>
           {conversations.map((conversation, index) => (
             <motion.div
@@ -43,7 +43,7 @@ export default function ConversationList({ conversations, isLoading }) {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, x: -20 }}
-              transition={{ duration: 0.2, delay: index * 0.05 }}
+              transition={{ duration: 0.2, delay: index * 0.03 }}
             >
               <ConversationItem conversation={conversation} />
             </motion.div>

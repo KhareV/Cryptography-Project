@@ -7,11 +7,17 @@ import mongoose from "mongoose";
 
 const messageSchema = new mongoose.Schema(
   {
-    // Reference to the conversation
+    // Reference to direct conversation (for 1:1 and legacy conversation chats)
     conversationId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Conversation",
-      required: [true, "Conversation ID is required"],
+      index: true,
+    },
+
+    // Reference to group chat
+    groupId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Group",
       index: true,
     },
 
@@ -28,7 +34,68 @@ const messageSchema = new mongoose.Schema(
       type: String,
       required: [true, "Message content is required"],
       trim: true,
-      maxlength: [5000, "Message cannot exceed 5000 characters"],
+      maxlength: [20000, "Message cannot exceed 20000 characters"],
+    },
+
+    // Client-managed E2EE metadata (used for direct 1:1 text messages)
+    isEncrypted: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    encryption: {
+      format: {
+        type: String,
+        default: "",
+      },
+      algorithm: {
+        type: String,
+        default: "",
+      },
+      keyExchange: {
+        type: String,
+        default: "",
+      },
+      iv: {
+        type: String,
+        default: "",
+      },
+      authTag: {
+        type: String,
+        default: "",
+      },
+      senderWrappedKey: {
+        type: String,
+        default: "",
+      },
+      recipientWrappedKey: {
+        type: String,
+        default: "",
+      },
+      senderId: {
+        type: String,
+        default: "",
+      },
+      recipientId: {
+        type: String,
+        default: "",
+      },
+      senderFingerprint: {
+        type: String,
+        default: "",
+      },
+      recipientFingerprint: {
+        type: String,
+        default: "",
+      },
+      keyVersion: {
+        type: String,
+        default: "",
+      },
+      encryptedAt: {
+        type: Date,
+        default: null,
+      },
     },
 
     // Message type
@@ -158,7 +225,7 @@ const messageSchema = new mongoose.Schema(
     toObject: {
       virtuals: true,
     },
-  }
+  },
 );
 
 // Compound indexes for efficient queries
@@ -166,13 +233,35 @@ messageSchema.index({ conversationId: 1, createdAt: -1 });
 messageSchema.index({ conversationId: 1, sender: 1 });
 messageSchema.index({ sender: 1, createdAt: -1 });
 messageSchema.index({ conversationId: 1, isDeleted: 1, createdAt: -1 });
+messageSchema.index({ groupId: 1, createdAt: -1 });
+messageSchema.index({ groupId: 1, sender: 1, createdAt: -1 });
+
+// Ensure exactly one message scope is provided.
+messageSchema.pre("validate", function (next) {
+  const hasConversation = Boolean(this.conversationId);
+  const hasGroup = Boolean(this.groupId);
+
+  if (!hasConversation && !hasGroup) {
+    return next(
+      new Error("Message must belong to either a conversation or a group"),
+    );
+  }
+
+  if (hasConversation && hasGroup) {
+    return next(
+      new Error("Message cannot belong to both a conversation and a group"),
+    );
+  }
+
+  return next();
+});
 
 // Static method to get messages with pagination
 messageSchema.statics.getConversationMessages = function (
   conversationId,
   userId,
   page = 1,
-  limit = 50
+  limit = 50,
 ) {
   const skip = (page - 1) * limit;
 
@@ -187,7 +276,39 @@ messageSchema.statics.getConversationMessages = function (
     })
     .populate({
       path: "replyTo",
-      select: "content sender type",
+      select: "content sender type isEncrypted encryption",
+      populate: {
+        path: "sender",
+        select: "clerkId username firstName lastName",
+      },
+    })
+    .sort({ createdAt: -1 })
+    .skip(skip)
+    .limit(limit)
+    .lean();
+};
+
+// Static method to get group messages with pagination
+messageSchema.statics.getGroupMessages = function (
+  groupId,
+  userId,
+  page = 1,
+  limit = 50,
+) {
+  const skip = (page - 1) * limit;
+
+  return this.find({
+    groupId,
+    isDeleted: false,
+    deletedFor: { $ne: userId },
+  })
+    .populate({
+      path: "sender",
+      select: "clerkId username firstName lastName avatar",
+    })
+    .populate({
+      path: "replyTo",
+      select: "content sender type isEncrypted encryption",
       populate: {
         path: "sender",
         select: "clerkId username firstName lastName",
@@ -226,7 +347,7 @@ messageSchema.statics.getLastMessage = function (conversationId) {
 // Instance method to mark as delivered for a user
 messageSchema.methods.markDelivered = async function (userId) {
   const alreadyDelivered = this.deliveredTo.some(
-    (d) => d.user.toString() === userId.toString()
+    (d) => d.user.toString() === userId.toString(),
   );
 
   if (!alreadyDelivered && this.sender.toString() !== userId.toString()) {
@@ -249,7 +370,7 @@ messageSchema.methods.markDelivered = async function (userId) {
 // Instance method to mark as read for a user
 messageSchema.methods.markRead = async function (userId) {
   const alreadyRead = this.readBy.some(
-    (r) => r.user.toString() === userId.toString()
+    (r) => r.user.toString() === userId.toString(),
   );
 
   if (!alreadyRead && this.sender.toString() !== userId.toString()) {
@@ -270,7 +391,7 @@ messageSchema.methods.markRead = async function (userId) {
 messageSchema.methods.addReaction = async function (userId, emoji) {
   // Remove existing reaction from same user
   this.reactions = this.reactions.filter(
-    (r) => r.user.toString() !== userId.toString()
+    (r) => r.user.toString() !== userId.toString(),
   );
 
   // Add new reaction
@@ -287,7 +408,7 @@ messageSchema.methods.addReaction = async function (userId, emoji) {
 // Instance method to remove reaction
 messageSchema.methods.removeReaction = async function (userId) {
   this.reactions = this.reactions.filter(
-    (r) => r.user.toString() !== userId.toString()
+    (r) => r.user.toString() !== userId.toString(),
   );
   await this.save();
   return this;

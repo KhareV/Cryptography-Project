@@ -174,13 +174,17 @@ export const validateSendMessage = [
   body("content")
     .isString()
     .trim()
-    .isLength({ min: 1, max: 5000 })
-    .withMessage("Message content must be between 1 and 5000 characters")
+    .isLength({ min: 1, max: 20000 })
+    .withMessage("Message content must be between 1 and 20000 characters")
     .customSanitizer(sanitizeString),
   body("type")
     .optional()
     .isIn(["text", "image", "file"])
     .withMessage("Message type must be text, image, or file"),
+  body("e2ee")
+    .optional({ nullable: true })
+    .isObject()
+    .withMessage("e2ee payload must be an object"),
   body("replyTo")
     .optional()
     .custom(isValidObjectId)
@@ -217,6 +221,170 @@ export const validateEditMessage = [
 ];
 
 // =====================================================
+// Group Validators
+// =====================================================
+
+export const validateGroupId = [
+  param("groupId").custom(isValidObjectId).withMessage("Invalid group ID"),
+  handleValidationErrors,
+];
+
+export const validateCreateGroup = [
+  body("groupId")
+    .isString()
+    .custom(isValidObjectId)
+    .withMessage("groupId must be a valid MongoDB ObjectId"),
+  body("name")
+    .isString()
+    .trim()
+    .isLength({ min: 2, max: 100 })
+    .withMessage("Group name must be between 2 and 100 characters")
+    .customSanitizer(sanitizeString),
+  body("description")
+    .optional({ nullable: true })
+    .isString()
+    .trim()
+    .isLength({ max: 500 })
+    .withMessage("Description cannot exceed 500 characters")
+    .customSanitizer(sanitizeString),
+  body("avatar")
+    .optional({ nullable: true })
+    .isString()
+    .trim()
+    .isLength({ max: 1000 })
+    .withMessage("Avatar URL is too long"),
+  body("memberIds")
+    .optional()
+    .isArray({ min: 0, max: 200 })
+    .withMessage("memberIds must be an array with up to 200 users"),
+  body("memberIds.*")
+    .optional()
+    .custom(isValidObjectId)
+    .withMessage("Invalid member ID"),
+  body("joinFeeEth")
+    .isFloat({ gt: 0, max: 1000 })
+    .withMessage("joinFeeEth must be greater than 0 and at most 1000")
+    .toFloat(),
+  body("walletAddress")
+    .isString()
+    .matches(/^0x[a-fA-F0-9]{40}$/)
+    .withMessage("walletAddress must be a valid Ethereum address"),
+  body("createTxHash")
+    .isString()
+    .matches(/^0x[a-fA-F0-9]{64}$/)
+    .withMessage("createTxHash must be a valid transaction hash"),
+  handleValidationErrors,
+];
+
+export const validateUpdateGroup = [
+  param("groupId").custom(isValidObjectId).withMessage("Invalid group ID"),
+  body("name")
+    .optional()
+    .isString()
+    .trim()
+    .isLength({ min: 2, max: 100 })
+    .withMessage("Group name must be between 2 and 100 characters")
+    .customSanitizer(sanitizeString),
+  body("description")
+    .optional({ nullable: true })
+    .isString()
+    .trim()
+    .isLength({ max: 500 })
+    .withMessage("Description cannot exceed 500 characters")
+    .customSanitizer(sanitizeString),
+  body("avatar")
+    .optional({ nullable: true })
+    .isString()
+    .trim()
+    .isLength({ max: 1000 })
+    .withMessage("Avatar URL is too long"),
+  handleValidationErrors,
+];
+
+export const validateGroupMemberMutation = [
+  param("groupId").custom(isValidObjectId).withMessage("Invalid group ID"),
+  body("memberId").custom(isValidObjectId).withMessage("Invalid member ID"),
+  handleValidationErrors,
+];
+
+export const validateGroupJoin = [
+  param("groupId").custom(isValidObjectId).withMessage("Invalid group ID"),
+  body("walletAddress")
+    .isString()
+    .matches(/^0x[a-fA-F0-9]{40}$/)
+    .withMessage("walletAddress must be a valid Ethereum address"),
+  body("joinTxHash")
+    .isString()
+    .matches(/^0x[a-fA-F0-9]{64}$/)
+    .withMessage("joinTxHash must be a valid transaction hash"),
+  handleValidationErrors,
+];
+
+export const validateGroupOnChainRegistration = [
+  param("groupId").custom(isValidObjectId).withMessage("Invalid group ID"),
+  body("walletAddress")
+    .isString()
+    .matches(/^0x[a-fA-F0-9]{40}$/)
+    .withMessage("walletAddress must be a valid Ethereum address"),
+  body("txHash")
+    .isString()
+    .matches(/^0x[a-fA-F0-9]{64}$/)
+    .withMessage("txHash must be a valid transaction hash"),
+  handleValidationErrors,
+];
+
+export const validateGroupMessagePagination = [
+  param("groupId").custom(isValidObjectId).withMessage("Invalid group ID"),
+  query("page")
+    .optional()
+    .isInt({ min: 1 })
+    .withMessage("Page must be a positive integer")
+    .toInt(),
+  query("limit")
+    .optional()
+    .isInt({ min: 1, max: 100 })
+    .withMessage("Limit must be between 1 and 100")
+    .toInt(),
+  handleValidationErrors,
+];
+
+export const validateSendGroupMessage = [
+  param("groupId").custom(isValidObjectId).withMessage("Invalid group ID"),
+  body("content")
+    .optional({ nullable: true })
+    .isString()
+    .trim()
+    .isLength({ max: 5000 })
+    .withMessage("Message content cannot exceed 5000 characters")
+    .customSanitizer(sanitizeString),
+  body("type")
+    .optional()
+    .isIn(["text", "image", "file"])
+    .withMessage("Message type must be text, image, or file"),
+  body("replyTo")
+    .optional({ nullable: true })
+    .custom(isValidObjectId)
+    .withMessage("Invalid reply message ID"),
+  body("fileUrl")
+    .optional({ nullable: true })
+    .isString()
+    .withMessage("fileUrl must be a string"),
+  body().custom((value) => {
+    const hasContent =
+      typeof value?.content === "string" && value.content.trim().length > 0;
+    const hasFileUrl =
+      typeof value?.fileUrl === "string" && value.fileUrl.trim().length > 0;
+
+    if (!hasContent && !hasFileUrl) {
+      throw new Error("Message content or fileUrl is required");
+    }
+
+    return true;
+  }),
+  handleValidationErrors,
+];
+
+// =====================================================
 // Socket Message Validators
 // =====================================================
 
@@ -237,8 +405,8 @@ export const validateSocketMessage = (data) => {
 
   if (!data.content || typeof data.content !== "string") {
     errors.push("Message content is required");
-  } else if (data.content.length > 5000) {
-    errors.push("Message content cannot exceed 5000 characters");
+  } else if (data.content.length > 20000) {
+    errors.push("Message content cannot exceed 20000 characters");
   }
 
   if (data.type && !["text", "image", "file"].includes(data.type)) {
@@ -253,6 +421,10 @@ export const validateSocketMessage = (data) => {
       content: sanitizeString(data.content || ""),
       type: data.type || "text",
       replyTo: data.replyTo,
+      e2ee:
+        data.e2ee && typeof data.e2ee === "object" && !Array.isArray(data.e2ee)
+          ? data.e2ee
+          : null,
     },
   };
 };
@@ -269,5 +441,13 @@ export default {
   validateSendMessage,
   validateMessagePagination,
   validateEditMessage,
+  validateGroupId,
+  validateCreateGroup,
+  validateUpdateGroup,
+  validateGroupMemberMutation,
+  validateGroupJoin,
+  validateGroupOnChainRegistration,
+  validateGroupMessagePagination,
+  validateSendGroupMessage,
   validateSocketMessage,
 };

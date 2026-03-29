@@ -113,6 +113,29 @@ const conversationSchema = new mongoose.Schema(
         },
       },
     ],
+
+    // Last blockchain anchor metadata for integrity verification
+    lastAnchor: {
+      txHash: {
+        type: String,
+        trim: true,
+        default: "",
+      },
+      merkleRoot: {
+        type: String,
+        trim: true,
+        default: "",
+      },
+      anchoredAt: {
+        type: Date,
+        default: null,
+      },
+      messageCount: {
+        type: Number,
+        default: 0,
+        min: 0,
+      },
+    },
   },
   {
     timestamps: true,
@@ -138,7 +161,7 @@ const conversationSchema = new mongoose.Schema(
     toObject: {
       virtuals: true,
     },
-  }
+  },
 );
 
 // Indexes for efficient queries
@@ -150,7 +173,7 @@ conversationSchema.index({ participants: 1, isActive: 1 });
 // Static method to find direct conversation between two users
 conversationSchema.statics.findDirectConversation = function (
   userId1,
-  userId2
+  userId2,
 ) {
   return this.findOne({
     type: "direct",
@@ -163,7 +186,7 @@ conversationSchema.statics.findDirectConversation = function (
 conversationSchema.statics.getUserConversations = function (
   userId,
   page = 1,
-  limit = 20
+  limit = 20,
 ) {
   const skip = (page - 1) * limit;
 
@@ -189,7 +212,7 @@ conversationSchema.statics.getUserConversations = function (
 // Static method to create or get direct conversation
 conversationSchema.statics.findOrCreateDirect = async function (
   userId1,
-  userId2
+  userId2,
 ) {
   let conversation = await this.findOne({
     type: "direct",
@@ -234,7 +257,7 @@ conversationSchema.methods.updateLastMessage = async function (message) {
     const participantKey = participantId.toString();
     if (participantKey !== message.sender.toString()) {
       const unreadEntry = this.unreadCount.find(
-        (entry) => entry.user && entry.user.toString() === participantKey
+        (entry) => entry.user && entry.user.toString() === participantKey,
       );
       if (unreadEntry) {
         unreadEntry.count += 1;
@@ -252,7 +275,7 @@ conversationSchema.methods.updateLastMessage = async function (message) {
 conversationSchema.methods.markAsRead = async function (userId) {
   const userKey = userId.toString();
   const unreadEntry = this.unreadCount.find(
-    (entry) => entry.user && entry.user.toString() === userKey
+    (entry) => entry.user && entry.user.toString() === userKey,
   );
   if (unreadEntry) {
     unreadEntry.count = 0;
@@ -266,7 +289,7 @@ conversationSchema.methods.markAsRead = async function (userId) {
 // Instance method to get unread count for a user
 conversationSchema.methods.getUnreadCount = function (userId) {
   const unreadEntry = this.unreadCount.find(
-    (entry) => entry.user && entry.user.toString() === userId.toString()
+    (entry) => entry.user && entry.user.toString() === userId.toString(),
   );
   return unreadEntry ? unreadEntry.count : 0;
 };
@@ -276,7 +299,7 @@ conversationSchema.methods.isParticipant = function (userId) {
   return this.participants.some(
     (p) =>
       p.toString() === userId.toString() ||
-      p._id?.toString() === userId.toString()
+      p._id?.toString() === userId.toString(),
   );
 };
 
@@ -293,10 +316,10 @@ conversationSchema.methods.addParticipant = async function (userId) {
 // Instance method to remove participant (for groups)
 conversationSchema.methods.removeParticipant = async function (userId) {
   this.participants = this.participants.filter(
-    (p) => p.toString() !== userId.toString()
+    (p) => p.toString() !== userId.toString(),
   );
   this.unreadCount = this.unreadCount.filter(
-    (entry) => entry.user.toString() !== userId.toString()
+    (entry) => entry.user.toString() !== userId.toString(),
   );
   await this.save();
   return this;
@@ -307,14 +330,14 @@ conversationSchema.pre("save", function (next) {
   // Direct conversations must have exactly 2 participants
   if (this.type === "direct" && this.participants.length !== 2) {
     return next(
-      new Error("Direct conversations must have exactly 2 participants")
+      new Error("Direct conversations must have exactly 2 participants"),
     );
   }
 
   // Group conversations must have at least 2 participants
   if (this.type === "group" && this.participants.length < 2) {
     return next(
-      new Error("Group conversations must have at least 2 participants")
+      new Error("Group conversations must have at least 2 participants"),
     );
   }
 

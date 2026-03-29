@@ -67,6 +67,69 @@ const userSchema = new mongoose.Schema(
       default: "",
     },
 
+    // Wallet bound to user for blockchain features
+    walletAddress: {
+      type: String,
+      trim: true,
+      lowercase: true,
+      index: true,
+      default: "",
+    },
+
+    // Latest transaction hash associated with blockchain actions
+    blockchainTxHash: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+
+    // Optional key metadata snapshot for quick UI display
+    keyFingerprint: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    keyPublicKey: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    encryptedPrivateKey: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    keyEncryptionSalt: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    keyEncryptionIv: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    keyEncryptionIterations: {
+      type: Number,
+      default: 100000,
+      min: 1000,
+      max: 1000000,
+    },
+    keyEncryptionAlgorithm: {
+      type: String,
+      trim: true,
+      default: "AES-256-GCM",
+    },
+    keyEncryptionKdf: {
+      type: String,
+      trim: true,
+      default: "PBKDF2-SHA-256",
+    },
+    keyRegisteredAt: {
+      type: Date,
+      default: null,
+    },
+
     // Online status
     status: {
       type: String,
@@ -130,13 +193,14 @@ const userSchema = new mongoose.Schema(
     toObject: {
       virtuals: true,
     },
-  }
+  },
 );
 
 // Compound indexes for better query performance
 userSchema.index({ username: "text", firstName: "text", lastName: "text" });
 userSchema.index({ status: 1, lastSeen: -1 });
 userSchema.index({ createdAt: -1 });
+userSchema.index({ walletAddress: 1, isActive: 1 });
 
 // Virtual for full name
 userSchema.virtual("fullName").get(function () {
@@ -204,7 +268,7 @@ userSchema.methods.addContact = async function (userId) {
 // Instance method to remove contact
 userSchema.methods.removeContact = async function (userId) {
   this.contacts = this.contacts.filter(
-    (id) => id.toString() !== userId.toString()
+    (id) => id.toString() !== userId.toString(),
   );
   await this.save();
   return this;

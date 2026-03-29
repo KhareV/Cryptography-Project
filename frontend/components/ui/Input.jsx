@@ -19,15 +19,19 @@ const Input = forwardRef(
       onClear,
       ...props
     },
-    ref
+    ref,
   ) => {
     const [showPassword, setShowPassword] = useState(false);
     const inputType = type === "password" && showPassword ? "text" : type;
+    const hasValue =
+      props.value !== undefined &&
+      props.value !== null &&
+      String(props.value).length > 0;
 
     return (
       <div className="w-full">
         {label && (
-          <label className="block text-sm font-medium text-foreground mb-1.5">
+          <label className="block text-sm font-medium text-foreground/90 mb-1.5">
             {label}
           </label>
         )}
@@ -43,27 +47,29 @@ const Input = forwardRef(
             ref={ref}
             type={inputType}
             className={cn(
-              "w-full px-4 py-2.5 rounded-xl",
-              "bg-background-secondary border border-border",
-              "text-foreground placeholder: text-foreground-secondary",
+              "w-full px-4 py-2.5 rounded-2xl",
+              "bg-background/85 border border-border/80 backdrop-blur-sm",
+              "text-foreground placeholder:text-foreground-secondary",
               "transition-all duration-200",
-              "focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent",
-              "disabled:opacity-50 disabled: cursor-not-allowed",
+              "hover:border-sky-500/30",
+              "focus:outline-none focus:ring-2 focus:ring-sky-500/25 focus:border-sky-500/45",
+              "disabled:opacity-50 disabled:cursor-not-allowed",
               leftIcon && "pl-10",
               (rightIcon || showPasswordToggle || clearable) && "pr-10",
-              error && "border-red-500 focus:ring-red-500 focus:border-red-500",
-              className
+              error &&
+                "border-red-500 focus:ring-red-500/25 focus:border-red-500",
+              className,
             )}
             {...props}
           />
 
           {(rightIcon || showPasswordToggle || clearable) && (
             <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1">
-              {clearable && props.value && (
+              {clearable && hasValue && (
                 <button
                   type="button"
                   onClick={onClear}
-                  className="p-1 text-foreground-secondary hover: text-foreground transition-colors"
+                  className="rounded-md p-1 text-foreground-secondary hover:text-foreground hover:bg-background-secondary/80 transition-colors"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -73,7 +79,7 @@ const Input = forwardRef(
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="p-1 text-foreground-secondary hover: text-foreground transition-colors"
+                  className="rounded-md p-1 text-foreground-secondary hover:text-foreground hover:bg-background-secondary/80 transition-colors"
                 >
                   {showPassword ? (
                     <EyeOff className="w-4 h-4" />
@@ -97,7 +103,7 @@ const Input = forwardRef(
         )}
       </div>
     );
-  }
+  },
 );
 
 Input.displayName = "Input";
@@ -110,7 +116,7 @@ const SearchInput = forwardRef(({ className, ...props }, ref) => {
       type="search"
       leftIcon={<Search className="w-4 h-4" />}
       clearable
-      className={cn("bg-background-tertiary", className)}
+      className={cn("bg-background-secondary/70 border-border/70", className)}
       {...props}
     />
   );

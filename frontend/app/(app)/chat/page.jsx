@@ -34,7 +34,7 @@ export default function ChatPage() {
       <Sidebar />
 
       {/* Main Content - Empty State */}
-      <main className="flex-1 hidden md:flex items-center justify-center bg-background-secondary/30">
+      <main className="flex-1 hidden md:flex items-center justify-center bg-background/60 chat-surface">
         <EmptyState />
       </main>
 

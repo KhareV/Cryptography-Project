@@ -19,6 +19,10 @@ import {
   onUserOffline,
   onConversationNew,
   onConversationUpdated,
+  onGroupMessageNew,
+  onGroupUpdated,
+  onGroupMemberAdded,
+  onGroupMemberRemoved,
 } from "@/lib/socket";
 import { playNotificationSound } from "@/lib/utils";
 import toast from "react-hot-toast";
@@ -37,6 +41,14 @@ export function useSocket() {
     removeTypingUser,
     setUserOnline,
     setUserOffline,
+    setUserInCall,
+    setUserCallEnded,
+    addGroup,
+    updateGroup,
+    removeGroup,
+    addGroupMessage,
+    incrementGroupUnread,
+    clearGroupUnread,
     activeConversationId,
     settings,
   } = useStore();
@@ -47,10 +59,14 @@ export function useSocket() {
       console.log("📨 Received new message:", message);
       addMessage(message.conversationId, message);
 
+      const previewText = message.isEncrypted
+        ? "[Encrypted message]"
+        : message.content;
+
       // Update conversation's last message
       updateConversation(message.conversationId, {
         lastMessage: {
-          content: message.content,
+          content: previewText,
           sender: message.sender,
           timestamp: message.createdAt,
           type: message.type,
@@ -58,25 +74,22 @@ export function useSocket() {
       });
 
       // Play sound if not from current user and sound is enabled
-      if (message.sender.clerkId !== user?.id && settings.soundEnabled) {
+      if (message.sender.clerkId !== user?.clerkId && settings.soundEnabled) {
         playNotificationSound();
       }
 
       // Show toast if not in active conversation
       if (
         message.conversationId !== activeConversationId &&
-        message.sender.clerkId !== user?.id
+        message.sender.clerkId !== user?.clerkId
       ) {
-        toast(
-          `${message.sender.username}:  ${message.content.substring(0, 50)}`,
-          {
-            icon: "💬",
-            duration: 3000,
-          }
-        );
+        toast(`${message.sender.username}:  ${previewText.substring(0, 50)}`, {
+          icon: "💬",
+          duration: 3000,
+        });
       }
     },
-    [addMessage, updateConversation, user, settings, activeConversationId]
+    [addMessage, updateConversation, user, settings, activeConversationId],
   );
 
   // Handle message delivered
@@ -86,7 +99,7 @@ export function useSocket() {
         status: "delivered",
       });
     },
-    [updateMessage]
+    [updateMessage],
   );
 
   // Handle message read
@@ -94,7 +107,7 @@ export function useSocket() {
     (data) => {
       updateMessage(data.conversationId, data.messageId, { status: "read" });
     },
-    [updateMessage]
+    [updateMessage],
   );
 
   // Handle message deleted
@@ -104,7 +117,7 @@ export function useSocket() {
         removeMessage(data.conversationId, data.messageId);
       }
     },
-    [removeMessage]
+    [removeMessage],
   );
 
   // Handle typing start
@@ -114,7 +127,7 @@ export function useSocket() {
         setTypingUser(data.conversationId, data.userId, data.user);
       }
     },
-    [user, setTypingUser]
+    [user, setTypingUser],
   );
 
   // Handle typing stop
@@ -122,7 +135,7 @@ export function useSocket() {
     (data) => {
       removeTypingUser(data.conversationId, data.userId);
     },
-    [removeTypingUser]
+    [removeTypingUser],
   );
 
   // Handle user online
@@ -130,7 +143,7 @@ export function useSocket() {
     (data) => {
       setUserOnline(data.userId);
     },
-    [setUserOnline]
+    [setUserOnline],
   );
 
   // Handle user offline
@@ -138,7 +151,25 @@ export function useSocket() {
     (data) => {
       setUserOffline(data.userId);
     },
-    [setUserOffline]
+    [setUserOffline],
+  );
+
+  const handleUserInCall = useCallback(
+    (data) => {
+      if (data?.userId) {
+        setUserInCall(data.userId);
+      }
+    },
+    [setUserInCall],
+  );
+
+  const handleUserCallEnded = useCallback(
+    (data) => {
+      if (data?.userId) {
+        setUserCallEnded(data.userId);
+      }
+    },
+    [setUserCallEnded],
   );
 
   // Handle new conversation
@@ -146,7 +177,7 @@ export function useSocket() {
     (data) => {
       addConversation(data.conversation);
     },
-    [addConversation]
+    [addConversation],
   );
 
   // Handle conversation updated
@@ -157,7 +188,91 @@ export function useSocket() {
         unreadCount: data.unreadCount,
       });
     },
-    [updateConversation]
+    [updateConversation],
+  );
+
+  const handleGroupMessage = useCallback(
+    (message) => {
+      if (!message?.groupId) return;
+
+      const state = useStore.getState();
+      const currentActiveGroupId = state.activeGroupId;
+      const currentUserId = state.user?.clerkId;
+
+      addGroupMessage(message.groupId, message);
+
+      updateGroup(message.groupId, {
+        lastMessage: {
+          content:
+            message.type === "text"
+              ? message.content
+              : `[${message.type || "file"}]`,
+          sender: message.sender,
+          timestamp: message.createdAt,
+          type: message.type,
+        },
+      });
+
+      if (
+        currentActiveGroupId !== message.groupId &&
+        message.sender?.clerkId !== currentUserId
+      ) {
+        incrementGroupUnread(message.groupId);
+      } else if (currentActiveGroupId === message.groupId) {
+        clearGroupUnread(message.groupId);
+      }
+    },
+    [addGroupMessage, updateGroup, incrementGroupUnread, clearGroupUnread],
+  );
+
+  const handleGroupUpdated = useCallback(
+    (payload) => {
+      if (!payload) return;
+
+      if (payload.action === "deleted" || payload.action === "left") {
+        if (payload.groupId) {
+          removeGroup(payload.groupId);
+        }
+        return;
+      }
+
+      if (payload.action === "removed-from-group") {
+        if (payload.groupId) {
+          removeGroup(payload.groupId);
+        }
+        return;
+      }
+
+      if (payload.group?.id) {
+        const exists = useStore
+          .getState()
+          .groups.some((group) => group.id === payload.group.id);
+        if (exists) {
+          updateGroup(payload.group.id, payload.group);
+        } else {
+          addGroup(payload.group);
+        }
+      }
+    },
+    [addGroup, updateGroup, removeGroup],
+  );
+
+  const handleGroupMemberAdded = useCallback(
+    (payload) => {
+      if (payload?.groupId) {
+        updateGroup(payload.groupId, { updatedAt: new Date().toISOString() });
+      }
+    },
+    [updateGroup],
+  );
+
+  const handleGroupMemberRemoved = useCallback(
+    (payload) => {
+      if (payload?.groupId) {
+        updateGroup(payload.groupId, { updatedAt: new Date().toISOString() });
+      }
+    },
+    [updateGroup],
   );
 
   // Initialize socket connection and attach event listeners
@@ -168,7 +283,7 @@ export function useSocket() {
     const existingSocket = getSocket();
     if (existingSocket && areListenersAttached()) {
       console.log(
-        "⏭️ Socket already initialized with listeners, skipping setup"
+        "⏭️ Socket already initialized with listeners, skipping setup",
       );
       // If socket is connected, update state
       if (existingSocket.connected) {
@@ -255,6 +370,14 @@ export function useSocket() {
           console.log("⚫ user:offline event received:", data);
           handleUserOffline(data);
         });
+        globalSocket.on("user:in-call", (data) => {
+          console.log("📞 user:in-call event received:", data);
+          handleUserInCall(data);
+        });
+        globalSocket.on("user:call-ended", (data) => {
+          console.log("📴 user:call-ended event received:", data);
+          handleUserCallEnded(data);
+        });
         globalSocket.on("conversation:new", (data) => {
           console.log("💬 conversation:new event received:", data);
           handleConversationNew(data);
@@ -263,10 +386,26 @@ export function useSocket() {
           console.log("🔄 conversation:updated event received:", data);
           handleConversationUpdated(data);
         });
+        globalSocket.on("group:message:new", (data) => {
+          console.log("👥 group:message:new event received:", data);
+          handleGroupMessage(data);
+        });
+        globalSocket.on("group:updated", (data) => {
+          console.log("🧩 group:updated event received:", data);
+          handleGroupUpdated(data);
+        });
+        globalSocket.on("group:member:added", (data) => {
+          console.log("➕ group:member:added event received:", data);
+          handleGroupMemberAdded(data);
+        });
+        globalSocket.on("group:member:removed", (data) => {
+          console.log("➖ group:member:removed event received:", data);
+          handleGroupMemberRemoved(data);
+        });
 
         console.log(
           "✅ All socket event listeners attached to socket:",
-          globalSocket.id
+          globalSocket.id,
         );
       } catch (error) {
         console.error("❌ Failed to initialize socket:", error);
@@ -282,7 +421,27 @@ export function useSocket() {
       // Don't remove event listeners or disconnect
       // The socket should remain connected for the entire session
     };
-  }, [isSignedIn, userId]); // Minimal dependencies - only reconnect if user changes
+  }, [
+    isSignedIn,
+    userId,
+    handleNewMessage,
+    handleMessageDelivered,
+    handleMessageRead,
+    handleMessageDeleted,
+    handleTypingStart,
+    handleTypingStop,
+    handleUserOnline,
+    handleUserOffline,
+    handleUserInCall,
+    handleUserCallEnded,
+    handleConversationNew,
+    handleConversationUpdated,
+    handleGroupMessage,
+    handleGroupUpdated,
+    handleGroupMemberAdded,
+    handleGroupMemberRemoved,
+    setSocketConnected,
+  ]);
 
   return {
     socket: getSocket(),

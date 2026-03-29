@@ -47,14 +47,14 @@ export default function AppLayout({ children }) {
   // Loading state
   if (!isLoaded || !isSignedIn) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
+      <div className="min-h-screen flex items-center justify-center bg-background chat-surface">
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          className="flex flex-col items-center gap-4"
+          className="flex flex-col items-center gap-4 rounded-2xl border border-border/70 bg-background/90 px-8 py-7 shadow-lg"
         >
           <Loader2 className="w-8 h-8 text-accent animate-spin" />
-          <p className="text-foreground-secondary">Loading... </p>
+          <p className="text-foreground-secondary">Loading your workspace...</p>
         </motion.div>
       </div>
     );
@@ -66,7 +66,7 @@ export default function AppLayout({ children }) {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="min-h-screen bg-background"
+        className="min-h-screen bg-background chat-surface"
       >
         {children}
       </motion.div>

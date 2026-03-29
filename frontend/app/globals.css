@@ -40,9 +40,9 @@
   --radius: 0.75rem;
 
   /* Brand Gradients */
-  --gradient-1: #3b82f6;
-  --gradient-2: #8b5cf6;
-  --gradient-3: #ec4899;
+  --gradient-1: #0ea5e9;
+  --gradient-2: #14b8a6;
+  --gradient-3: #22c55e;
 }
 
 .dark {
@@ -91,7 +91,10 @@
 
   body {
     @apply bg-background text-foreground;
-    font-feature-settings: "rlig" 1, "calt" 1, "cv11" 1; /* Better legibility */
+    font-feature-settings:
+      "rlig" 1,
+      "calt" 1,
+      "cv11" 1; /* Better legibility */
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
@@ -99,7 +102,7 @@
 
   /* Selection Color */
   ::selection {
-    background-color: rgba(139, 92, 246, 0.3); /* Purple tint */
+    background-color: rgba(14, 165, 233, 0.25);
     color: white;
   }
 }
@@ -112,20 +115,21 @@
   /* Used for panels, sidebars, modals */
   .glass-panel {
     @apply bg-zinc-900/40 backdrop-blur-xl border border-white/10 shadow-2xl;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1),
+    box-shadow:
+      0 4px 6px -1px rgba(0, 0, 0, 0.1),
       0 2px 4px -1px rgba(0, 0, 0, 0.06),
       inset 0 1px 0 rgba(255, 255, 255, 0.05); /* Top inner highlight */
   }
 
   /* --- The "Aurora" Text Gradient --- */
   .text-aurora {
-    @apply bg-clip-text text-transparent bg-gradient-to-r from-blue-400 via-purple-500 to-pink-500 animate-gradient-x;
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-sky-500 via-cyan-500 to-teal-500 animate-gradient-x;
     background-size: 200% auto;
   }
 
   /* --- Interactive Cards --- */
   .hover-card {
-    @apply transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-lg hover:shadow-purple-500/10 hover:border-white/20;
+    @apply transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-lg hover:shadow-sky-500/10 hover:border-white/20;
   }
 
   /* --- Inputs & Forms --- */
@@ -157,7 +161,26 @@
     background: transparent;
   }
   .scrollbar-thin::-webkit-scrollbar-thumb {
-    @apply bg-zinc-800 rounded-full hover:bg-zinc-600 transition-colors;
+    @apply bg-border rounded-full hover:bg-foreground-secondary/60 transition-colors;
+  }
+
+  .chat-surface {
+    background-image:
+      radial-gradient(
+        circle at 10% 10%,
+        rgba(14, 165, 233, 0.08),
+        transparent 35%
+      ),
+      radial-gradient(
+        circle at 80% 20%,
+        rgba(16, 185, 129, 0.07),
+        transparent 35%
+      ),
+      radial-gradient(
+        circle at 40% 80%,
+        rgba(15, 23, 42, 0.06),
+        transparent 45%
+      );
   }
 
   /* --- Glow Utilities --- */
@@ -165,7 +188,7 @@
     box-shadow: 0 0 30px -5px rgba(59, 130, 246, 0.4);
   }
   .shadow-glow-purple {
-    box-shadow: 0 0 30px -5px rgba(139, 92, 246, 0.4);
+    box-shadow: 0 0 30px -5px rgba(14, 165, 233, 0.35);
   }
 
   /* --- Animation Utilities --- */

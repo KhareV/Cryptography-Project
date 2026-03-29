@@ -1,124 +1,163 @@
 /**
  * Socket.io Call Event Handlers
- * Handles real-time voice calling functionality
+ * Handles signaling for peer-to-peer audio calls
  */
 
+import Call from "../../models/Call.js";
 import { socketManager } from "../../utils/socketManager.js";
-import { logger, ApiError } from "../../utils/helpers.js";
-import Conversation from "../../models/Conversation.js";
+import { logger } from "../../utils/helpers.js";
+
+const TERMINAL_STATUSES = new Set(["ended", "rejected", "missed"]);
+
+const emitToUser = (userId, event, payload) => {
+  const sockets = socketManager.getUserSockets(userId);
+  if (!sockets.length) return;
+
+  sockets.forEach((socketId) => {
+    const userSocket = socketManager.getSocket(socketId);
+    if (userSocket) {
+      userSocket.emit(event, payload);
+    }
+  });
+};
+
+const emitCallPresenceChanged = (userId) => {
+  const userIdStr = userId.toString();
+  const { changed, isInCall } = socketManager.refreshUserCallState(userIdStr);
+
+  if (!changed) return;
+
+  const event = isInCall ? "user:in-call" : "user:call-ended";
+  const payload = { userId: userIdStr, timestamp: new Date().toISOString() };
+
+  socketManager.getOnlineUsers().forEach((onlineUserId) => {
+    emitToUser(onlineUserId, event, payload);
+  });
+};
+
+const updateCallEndState = async (callId, status) => {
+  const call = await Call.findOne({ callId });
+  const endedAt = new Date();
+
+  if (!call) return { endedAt, duration: 0 };
+
+  if (TERMINAL_STATUSES.has(call.status)) {
+    return {
+      endedAt: call.endedAt || endedAt,
+      duration: typeof call.duration === "number" ? call.duration : 0,
+    };
+  }
+
+  const duration = call.startedAt
+    ? Math.max(
+        0,
+        Math.floor((endedAt.getTime() - call.startedAt.getTime()) / 1000),
+      )
+    : 0;
+
+  call.status = status;
+  call.endedAt = endedAt;
+  call.duration = duration;
+  await call.save();
+
+  return { endedAt, duration };
+};
 
 /**
- * Handle initiating a voice call
- * @param {Object} socket - Socket instance
- * @param {Object} data - Call data
- * @param {Function} callback - Acknowledgment callback
+ * call:initiate
+ * Payload: { to, callId, callerName, callerAvatar }
  */
-export const handleCallInitiate = async (socket, data, callback) => {
+export const handleCallInitiate = async (socket, data = {}, callback) => {
   try {
-    const { conversationId, callType = "voice" } = data;
-    const callerId = socket.userId;
+    const callerId = socket.userId.toString();
+    const { to, callId, callerName = "Unknown", callerAvatar = "" } = data;
 
-    // Verify conversation exists and user is participant
-    const conversation = await Conversation.findById(conversationId).populate(
-      "participants",
-      "_id username firstName lastName avatar status"
-    );
-
-    if (!conversation) {
+    if (!to || !callId) {
       if (typeof callback === "function") {
-        callback({ success: false, error: "Conversation not found" });
+        callback({ success: false, error: "to and callId are required" });
       }
       return;
     }
 
-    if (!conversation.isParticipant(callerId)) {
+    if (to.toString() === callerId) {
       if (typeof callback === "function") {
-        callback({
-          success: false,
-          error: "Not a participant in this conversation",
-        });
+        callback({ success: false, error: "Cannot call yourself" });
       }
       return;
     }
 
-    // Get the other participant
-    const otherParticipant = conversation.participants.find(
-      (p) => p._id.toString() !== callerId
-    );
-
-    if (!otherParticipant) {
-      if (typeof callback === "function") {
-        callback({ success: false, error: "Other participant not found" });
-      }
-      return;
-    }
-
-    // Generate unique call ID
-    const callId = `call_${Date.now()}_${Math.random()
-      .toString(36)
-      .substr(2, 9)}`;
-
-    // Get caller info
-    const caller = conversation.participants.find(
-      (p) => p._id.toString() === callerId
-    );
-
-    const callData = {
-      callId,
-      conversationId,
-      callType,
-      caller: {
-        id: caller._id.toString(),
-        username: caller.username,
-        firstName: caller.firstName,
-        lastName: caller.lastName,
-        avatar: caller.avatar,
+    await Call.findOneAndUpdate(
+      { callId },
+      {
+        $setOnInsert: {
+          callId,
+          callType: "audio",
+          callMode: "direct",
+          initiatorId: callerId,
+          receiverId: to,
+        },
+        $set: {
+          status: "ringing",
+          startedAt: null,
+          endedAt: null,
+          duration: 0,
+        },
       },
-      recipient: {
-        id: otherParticipant._id.toString(),
-        username: otherParticipant.username,
-        firstName: otherParticipant.firstName,
-        lastName: otherParticipant.lastName,
-        avatar: otherParticipant.avatar,
-      },
-      status: "ringing",
-      startTime: new Date().toISOString(),
-    };
-
-    // Store call in socket manager
-    socketManager.setCallData(callId, callData);
-
-    // Emit call incoming to recipient
-    const recipientSocketIds = socketManager.getUserSockets(
-      otherParticipant._id.toString()
+      { new: true, upsert: true },
     );
-    if (recipientSocketIds && recipientSocketIds.length > 0) {
-      recipientSocketIds.forEach((socketId) => {
-        const recipientSocket = socketManager.getSocket(socketId);
-        if (recipientSocket) {
-          recipientSocket.emit("call_incoming", callData);
-        }
+
+    const targetSockets = socketManager.getUserSockets(to);
+    if (!targetSockets.length) {
+      await updateCallEndState(callId, "missed");
+
+      socket.emit("call:user-offline", {
+        callId,
+        to,
+        message: "User is offline",
       });
 
-      logger.info(
-        `📞 Call initiated: ${callId} from ${caller.username} to ${otherParticipant.username}`
-      );
+      if (typeof callback === "function") {
+        callback({ success: false, error: "User is offline" });
+      }
+      return;
+    }
+
+    const busyCalls = socketManager.getUserActiveCalls(to).filter((call) => {
+      return !TERMINAL_STATUSES.has(call.status);
+    });
+
+    if (busyCalls.length > 0) {
+      await updateCallEndState(callId, "rejected");
+      socket.emit("call:rejected", { callId, reason: "busy", from: to });
 
       if (typeof callback === "function") {
-        callback({ success: true, callId, callData });
+        callback({ success: false, error: "User is busy", reason: "busy" });
       }
-    } else {
-      // Recipient is offline
-      if (typeof callback === "function") {
-        callback({
-          success: false,
-          error: "Recipient is not available",
-          userOffline: true,
-        });
-      }
+      return;
     }
+
+    socketManager.setCallData(callId, {
+      callId,
+      initiatorId: callerId,
+      receiverId: to.toString(),
+      status: "ringing",
+      createdAt: new Date().toISOString(),
+    });
+
+    emitToUser(to, "call:incoming", {
+      callId,
+      callerId,
+      callerName,
+      callerAvatar,
+    });
+
+    if (typeof callback === "function") {
+      callback({ success: true, callId });
+    }
+
+    logger.info(`Call initiated: ${callId} from ${callerId} to ${to}`);
   } catch (error) {
-    logger.error("Error handling call initiate:", error);
+    logger.error("Error handling call:initiate:", error);
     if (typeof callback === "function") {
       callback({ success: false, error: "Failed to initiate call" });
     }
@@ -126,186 +165,269 @@ export const handleCallInitiate = async (socket, data, callback) => {
 };
 
 /**
- * Handle answering a call
- * @param {Object} socket - Socket instance
- * @param {Object} data - Call answer data
- * @param {Function} callback - Acknowledgment callback
+ * call:accept
+ * Payload: { callId, to }
  */
-export const handleCallAnswer = async (socket, data, callback) => {
+export const handleCallAccept = async (socket, data = {}, callback) => {
   try {
-    const { callId } = data;
-    const answerId = socket.userId;
+    const accepterId = socket.userId.toString();
+    const { callId, to } = data;
 
-    const callData = socketManager.getCallData(callId);
-    if (!callData) {
+    if (!callId || !to) {
       if (typeof callback === "function") {
-        callback({ success: false, error: "Call not found" });
+        callback({ success: false, error: "callId and to are required" });
       }
       return;
     }
 
-    // Verify the answering user is the recipient
-    if (callData.recipient.id !== answerId) {
-      if (typeof callback === "function") {
-        callback({ success: false, error: "Unauthorized to answer this call" });
-      }
-      return;
-    }
+    const startedAt = new Date();
 
-    // Update call status
-    callData.status = "answered";
-    callData.answerTime = new Date().toISOString();
-    socketManager.setCallData(callId, callData);
+    await Call.findOneAndUpdate(
+      { callId },
+      {
+        $set: {
+          status: "active",
+          startedAt,
+          endedAt: null,
+          duration: 0,
+        },
+      },
+      { new: true },
+    );
 
-    // Notify caller that call was answered
-    const callerSocketIds = socketManager.getUserSockets(callData.caller.id);
-    if (callerSocketIds && callerSocketIds.length > 0) {
-      callerSocketIds.forEach((socketId) => {
-        const callerSocket = socketManager.getSocket(socketId);
-        if (callerSocket) {
-          callerSocket.emit("call_answered", { callId, callData });
-        }
+    const existingCall = socketManager.getCallData(callId);
+    if (existingCall) {
+      socketManager.setCallData(callId, {
+        ...existingCall,
+        status: "active",
+        acceptedAt: startedAt.toISOString(),
+      });
+    } else {
+      socketManager.setCallData(callId, {
+        callId,
+        initiatorId: to.toString(),
+        receiverId: accepterId,
+        status: "active",
+        acceptedAt: startedAt.toISOString(),
       });
     }
 
-    logger.info(`📞 Call answered: ${callId}`);
+    emitToUser(to, "call:accepted", {
+      callId,
+      from: accepterId,
+      startedAt: startedAt.toISOString(),
+    });
+
+    emitCallPresenceChanged(to.toString());
+    emitCallPresenceChanged(accepterId);
 
     if (typeof callback === "function") {
-      callback({ success: true, callData });
+      callback({ success: true, callId });
     }
+
+    logger.info(`Call accepted: ${callId} by ${accepterId}`);
   } catch (error) {
-    logger.error("Error handling call answer:", error);
+    logger.error("Error handling call:accept:", error);
     if (typeof callback === "function") {
-      callback({ success: false, error: "Failed to answer call" });
+      callback({ success: false, error: "Failed to accept call" });
     }
   }
 };
 
 /**
- * Handle declining a call
- * @param {Object} socket - Socket instance
- * @param {Object} data - Call decline data
- * @param {Function} callback - Acknowledgment callback
+ * call:reject
+ * Payload: { callId, to, reason: 'busy' | 'declined' }
  */
-export const handleCallDecline = async (socket, data, callback) => {
+export const handleCallReject = async (socket, data = {}, callback) => {
   try {
-    const { callId } = data;
-    const declinerId = socket.userId;
+    const rejectorId = socket.userId.toString();
+    const { callId, to, reason = "declined", missed = false } = data;
 
-    const callData = socketManager.getCallData(callId);
-    if (!callData) {
+    if (!callId || !to) {
       if (typeof callback === "function") {
-        callback({ success: false, error: "Call not found" });
+        callback({ success: false, error: "callId and to are required" });
       }
       return;
     }
 
-    // Verify the declining user is the recipient
-    if (callData.recipient.id !== declinerId) {
-      if (typeof callback === "function") {
-        callback({
-          success: false,
-          error: "Unauthorized to decline this call",
-        });
-      }
-      return;
-    }
+    const safeReason = reason === "busy" ? "busy" : "declined";
+    const status = missed ? "missed" : "rejected";
+    const { endedAt, duration } = await updateCallEndState(callId, status);
 
-    // Update call status
-    callData.status = "declined";
-    callData.endTime = new Date().toISOString();
-
-    // Notify caller that call was declined
-    const callerSocketIds = socketManager.getUserSockets(callData.caller.id);
-    if (callerSocketIds && callerSocketIds.length > 0) {
-      callerSocketIds.forEach((socketId) => {
-        const callerSocket = socketManager.getSocket(socketId);
-        if (callerSocket) {
-          callerSocket.emit("call_declined", { callId, callData });
-        }
-      });
-    }
-
-    // Clean up call data
+    const existingCall = socketManager.getCallData(callId);
     socketManager.removeCallData(callId);
 
-    logger.info(`📞 Call declined: ${callId}`);
+    emitToUser(to, "call:rejected", {
+      callId,
+      reason: safeReason,
+      from: rejectorId,
+      endedAt: endedAt.toISOString(),
+      duration,
+    });
+
+    if (existingCall) {
+      emitCallPresenceChanged(existingCall.initiatorId);
+      emitCallPresenceChanged(existingCall.receiverId);
+    } else {
+      emitCallPresenceChanged(to.toString());
+      emitCallPresenceChanged(rejectorId);
+    }
 
     if (typeof callback === "function") {
-      callback({ success: true });
+      callback({ success: true, callId });
     }
+
+    logger.info(`Call rejected: ${callId} by ${rejectorId} (${safeReason})`);
   } catch (error) {
-    logger.error("Error handling call decline:", error);
+    logger.error("Error handling call:reject:", error);
     if (typeof callback === "function") {
-      callback({ success: false, error: "Failed to decline call" });
+      callback({ success: false, error: "Failed to reject call" });
     }
   }
 };
 
 /**
- * Handle ending a call
- * @param {Object} socket - Socket instance
- * @param {Object} data - Call end data
- * @param {Function} callback - Acknowledgment callback
+ * call:ice-candidate
+ * Payload: { callId, to, candidate }
  */
-export const handleCallEnd = async (socket, data, callback) => {
+export const handleCallIceCandidate = async (socket, data = {}, callback) => {
   try {
-    const { callId } = data;
-    const enderId = socket.userId;
+    const senderId = socket.userId.toString();
+    const { callId, to, candidate } = data;
 
-    const callData = socketManager.getCallData(callId);
-    if (!callData) {
+    if (!callId || !to || !candidate) {
       if (typeof callback === "function") {
-        callback({ success: false, error: "Call not found" });
+        callback({ success: false, error: "Invalid ICE payload" });
       }
       return;
     }
 
-    // Verify the ending user is a participant
-    const isParticipant =
-      callData.caller.id === enderId || callData.recipient.id === enderId;
-    if (!isParticipant) {
-      if (typeof callback === "function") {
-        callback({ success: false, error: "Unauthorized to end this call" });
-      }
-      return;
-    }
-
-    // Update call status
-    callData.status = "ended";
-    callData.endTime = new Date().toISOString();
-
-    // Notify other participant that call ended
-    const otherParticipantId =
-      enderId === callData.caller.id
-        ? callData.recipient.id
-        : callData.caller.id;
-
-    const otherParticipantSocketIds =
-      socketManager.getUserSockets(otherParticipantId);
-    if (otherParticipantSocketIds && otherParticipantSocketIds.length > 0) {
-      otherParticipantSocketIds.forEach((socketId) => {
-        const participantSocket = socketManager.getSocket(socketId);
-        if (participantSocket) {
-          participantSocket.emit("call_ended", {
-            callId,
-            callData,
-            endedBy: enderId,
-          });
-        }
-      });
-    }
-
-    // Clean up call data
-    socketManager.removeCallData(callId);
-
-    logger.info(`📞 Call ended: ${callId} by user ${enderId}`);
+    emitToUser(to, "call:ice-candidate", {
+      callId,
+      from: senderId,
+      candidate,
+    });
 
     if (typeof callback === "function") {
       callback({ success: true });
     }
   } catch (error) {
-    logger.error("Error handling call end:", error);
+    logger.error("Error handling call:ice-candidate:", error);
+    if (typeof callback === "function") {
+      callback({ success: false, error: "Failed to relay ICE candidate" });
+    }
+  }
+};
+
+/**
+ * call:offer
+ * Payload: { callId, to, offer }
+ */
+export const handleCallOffer = async (socket, data = {}, callback) => {
+  try {
+    const senderId = socket.userId.toString();
+    const { callId, to, offer } = data;
+
+    if (!callId || !to || !offer) {
+      if (typeof callback === "function") {
+        callback({ success: false, error: "Invalid offer payload" });
+      }
+      return;
+    }
+
+    emitToUser(to, "call:offer", {
+      callId,
+      from: senderId,
+      offer,
+    });
+
+    if (typeof callback === "function") {
+      callback({ success: true });
+    }
+  } catch (error) {
+    logger.error("Error handling call:offer:", error);
+    if (typeof callback === "function") {
+      callback({ success: false, error: "Failed to relay offer" });
+    }
+  }
+};
+
+/**
+ * call:answer
+ * Payload: { callId, to, answer }
+ */
+export const handleCallAnswer = async (socket, data = {}, callback) => {
+  try {
+    const senderId = socket.userId.toString();
+    const { callId, to, answer } = data;
+
+    if (!callId || !to || !answer) {
+      if (typeof callback === "function") {
+        callback({ success: false, error: "Invalid answer payload" });
+      }
+      return;
+    }
+
+    emitToUser(to, "call:answer", {
+      callId,
+      from: senderId,
+      answer,
+    });
+
+    if (typeof callback === "function") {
+      callback({ success: true });
+    }
+  } catch (error) {
+    logger.error("Error handling call:answer:", error);
+    if (typeof callback === "function") {
+      callback({ success: false, error: "Failed to relay answer" });
+    }
+  }
+};
+
+/**
+ * call:end
+ * Payload: { callId, to }
+ */
+export const handleCallEnd = async (socket, data = {}, callback) => {
+  try {
+    const enderId = socket.userId.toString();
+    const { callId, to } = data;
+
+    if (!callId || !to) {
+      if (typeof callback === "function") {
+        callback({ success: false, error: "callId and to are required" });
+      }
+      return;
+    }
+
+    const { endedAt, duration } = await updateCallEndState(callId, "ended");
+
+    const existingCall = socketManager.getCallData(callId);
+    socketManager.removeCallData(callId);
+
+    emitToUser(to, "call:ended", {
+      callId,
+      from: enderId,
+      endedAt: endedAt.toISOString(),
+      duration,
+    });
+
+    if (existingCall) {
+      emitCallPresenceChanged(existingCall.initiatorId);
+      emitCallPresenceChanged(existingCall.receiverId);
+    } else {
+      emitCallPresenceChanged(to.toString());
+      emitCallPresenceChanged(enderId);
+    }
+
+    if (typeof callback === "function") {
+      callback({ success: true, callId, duration });
+    }
+
+    logger.info(`Call ended: ${callId} by ${enderId}`);
+  } catch (error) {
+    logger.error("Error handling call:end:", error);
     if (typeof callback === "function") {
       callback({ success: false, error: "Failed to end call" });
     }
@@ -313,210 +435,46 @@ export const handleCallEnd = async (socket, data, callback) => {
 };
 
 /**
- * Handle call timeout (no answer)
- * @param {Object} socket - Socket instance
- * @param {Object} data - Call timeout data
- * @param {Function} callback - Acknowledgment callback
+ * Cleanup calls when a peer goes offline mid-call
  */
-export const handleCallTimeout = async (socket, data, callback) => {
-  try {
-    const { callId } = data;
+export const handleUserOfflineCallCleanup = async (offlineUserId) => {
+  const offlineId = offlineUserId.toString();
+  const calls = socketManager.getUserActiveCalls(offlineId);
 
-    const callData = socketManager.getCallData(callId);
-    if (!callData) {
-      if (typeof callback === "function") {
-        callback({ success: false, error: "Call not found" });
-      }
-      return;
-    }
-
-    // Update call status
-    callData.status = "missed";
-    callData.endTime = new Date().toISOString();
-
-    // Notify both participants that call timed out
-    const callerSocketIds = socketManager.getUserSockets(callData.caller.id);
-    if (callerSocketIds && callerSocketIds.length > 0) {
-      callerSocketIds.forEach((socketId) => {
-        const callerSocket = socketManager.getSocket(socketId);
-        if (callerSocket) {
-          callerSocket.emit("call_timeout", { callId, callData });
-        }
-      });
-    }
-
-    const recipientSocketIds = socketManager.getUserSockets(
-      callData.recipient.id
-    );
-    if (recipientSocketIds && recipientSocketIds.length > 0) {
-      recipientSocketIds.forEach((socketId) => {
-        const recipientSocket = socketManager.getSocket(socketId);
-        if (recipientSocket) {
-          recipientSocket.emit("call_timeout", { callId, callData });
-        }
-      });
-    }
-
-    // Clean up call data
-    socketManager.removeCallData(callId);
-
-    logger.info(`📞 Call timed out: ${callId}`);
-
-    if (typeof callback === "function") {
-      callback({ success: true });
-    }
-  } catch (error) {
-    logger.error("Error handling call timeout:", error);
-    if (typeof callback === "function") {
-      callback({ success: false, error: "Failed to handle call timeout" });
-    }
+  if (!calls.length) {
+    emitCallPresenceChanged(offlineId);
+    return;
   }
+
+  for (const call of calls) {
+    const otherPeerId =
+      call.initiatorId === offlineId ? call.receiverId : call.initiatorId;
+
+    const status = call.status === "active" ? "ended" : "missed";
+    const { endedAt, duration } = await updateCallEndState(call.callId, status);
+
+    emitToUser(otherPeerId, "call:ended", {
+      callId: call.callId,
+      from: offlineId,
+      dropped: true,
+      endedAt: endedAt.toISOString(),
+      duration,
+    });
+
+    socketManager.removeCallData(call.callId);
+    emitCallPresenceChanged(otherPeerId);
+  }
+
+  emitCallPresenceChanged(offlineId);
 };
 
-/**
- * Handle ICE candidate exchange for WebRTC
- * @param {Object} socket - Socket instance
- * @param {Object} data - ICE candidate data
- * @param {Function} callback - Acknowledgment callback
- */
-export const handleIceCandidate = async (socket, data, callback) => {
-  try {
-    const { callId, candidate, to } = data;
-    const senderId = socket.userId;
-
-    logger.debug(
-      `ICE candidate received from ${senderId}, callId: ${callId}, to: ${to}`
-    );
-
-    const callData = socketManager.getCallData(callId);
-    if (!callData) {
-      logger.warn(`Call data not found for callId: ${callId}`);
-      return; // Call might have ended
-    }
-
-    // Determine the target user ID if 'to' is not provided
-    const targetUserId =
-      to ||
-      (callData.caller.id === senderId
-        ? callData.recipient.id
-        : callData.caller.id);
-
-    if (!targetUserId) {
-      logger.warn("Cannot determine target user for ICE candidate");
-      return;
-    }
-
-    logger.debug(`Forwarding ICE candidate to user: ${targetUserId}`);
-
-    // Forward ICE candidate to the other participant
-    const targetSocketIds = socketManager.getUserSockets(targetUserId);
-    if (targetSocketIds && targetSocketIds.length > 0) {
-      targetSocketIds.forEach((socketId) => {
-        const targetSocket = socketManager.getSocket(socketId);
-        if (targetSocket) {
-          targetSocket.emit("ice_candidate", {
-            callId,
-            candidate,
-            from: senderId,
-          });
-        }
-      });
-    }
-  } catch (error) {
-    logger.error("Error handling ICE candidate:", error);
-  }
-};
-
-/**
- * Handle WebRTC offer exchange
- * @param {Object} socket - Socket instance
- * @param {Object} data - Offer data
- * @param {Function} callback - Acknowledgment callback
- */
-export const handleRtcOffer = async (socket, data, callback) => {
-  try {
-    const { callId, offer, to } = data;
-    const senderId = socket.userId;
-
-    const callData = socketManager.getCallData(callId);
-    if (!callData) {
-      return; // Call might have ended
-    }
-
-    // Determine the target user ID if 'to' is not provided
-    const targetUserId =
-      to ||
-      (callData.caller.id === senderId
-        ? callData.recipient.id
-        : callData.caller.id);
-
-    if (!targetUserId) {
-      console.warn("Cannot determine target user for RTC offer");
-      return;
-    }
-
-    // Forward offer to the other participant
-    const targetSocketIds = socketManager.getUserSockets(targetUserId);
-    if (targetSocketIds && targetSocketIds.length > 0) {
-      targetSocketIds.forEach((socketId) => {
-        const targetSocket = socketManager.getSocket(socketId);
-        if (targetSocket) {
-          targetSocket.emit("rtc_offer", {
-            callId,
-            offer,
-            from: senderId,
-          });
-        }
-      });
-    }
-  } catch (error) {
-    logger.error("Error handling RTC offer:", error);
-  }
-};
-
-/**
- * Handle WebRTC answer exchange
- * @param {Object} socket - Socket instance
- * @param {Object} data - Answer data
- * @param {Function} callback - Acknowledgment callback
- */
-export const handleRtcAnswer = async (socket, data, callback) => {
-  try {
-    const { callId, answer, to } = data;
-    const senderId = socket.userId;
-
-    const callData = socketManager.getCallData(callId);
-    if (!callData) {
-      return; // Call might have ended
-    }
-
-    // Determine the target user ID if 'to' is not provided
-    const targetUserId =
-      to ||
-      (callData.caller.id === senderId
-        ? callData.recipient.id
-        : callData.caller.id);
-
-    if (!targetUserId) {
-      console.warn("Cannot determine target user for RTC answer");
-      return;
-    }
-
-    // Forward answer to the other participant
-    const targetSocketIds = socketManager.getUserSockets(targetUserId);
-    if (targetSocketIds && targetSocketIds.length > 0) {
-      targetSocketIds.forEach((socketId) => {
-        const targetSocket = socketManager.getSocket(socketId);
-        if (targetSocket) {
-          targetSocket.emit("rtc_answer", {
-            callId,
-            answer,
-            from: senderId,
-          });
-        }
-      });
-    }
-  } catch (error) {
-    logger.error("Error handling RTC answer:", error);
-  }
+export default {
+  handleCallInitiate,
+  handleCallAccept,
+  handleCallReject,
+  handleCallIceCandidate,
+  handleCallOffer,
+  handleCallAnswer,
+  handleCallEnd,
+  handleUserOfflineCallCleanup,
 };

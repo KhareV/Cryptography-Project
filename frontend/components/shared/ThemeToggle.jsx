@@ -18,11 +18,11 @@ export function ThemeToggle({ className }) {
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
           className={cn(
-            "p-2 rounded-xl",
-            "text-foreground-secondary hover: text-foreground",
-            "hover:bg-background-secondary",
+            "h-10 w-10 rounded-xl border border-border/70",
+            "text-foreground-secondary hover:text-foreground",
+            "hover:bg-background-secondary/70",
             "transition-colors",
-            className
+            className,
           )}
         >
           <ThemeIcon className="w-5 h-5" />

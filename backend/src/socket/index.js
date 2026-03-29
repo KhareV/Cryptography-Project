@@ -35,14 +35,20 @@ import {
 
 import {
   handleCallInitiate,
+  handleCallAccept,
+  handleCallReject,
   handleCallAnswer,
-  handleCallDecline,
+  handleCallIceCandidate,
+  handleCallOffer,
   handleCallEnd,
-  handleCallTimeout,
-  handleIceCandidate,
-  handleRtcOffer,
-  handleRtcAnswer,
 } from "./handlers/callHandlers.js";
+
+import {
+  handleGroupCreate,
+  handleGroupJoin,
+  handleGroupLeave,
+  handleGroupSendMessage,
+} from "./handlers/groupHandlers.js";
 
 /**
  * Initialize Socket.io server
@@ -157,32 +163,48 @@ export const initializeSocket = (httpServer) => {
       handleCallInitiate(socket, data, callback);
     });
 
-    socket.on("call:answer", (data, callback) => {
-      handleCallAnswer(socket, data, callback);
+    socket.on("call:accept", (data, callback) => {
+      handleCallAccept(socket, data, callback);
     });
 
-    socket.on("call:decline", (data, callback) => {
-      handleCallDecline(socket, data, callback);
+    socket.on("call:reject", (data, callback) => {
+      handleCallReject(socket, data, callback);
+    });
+
+    socket.on("call:ice-candidate", (data, callback) => {
+      handleCallIceCandidate(socket, data, callback);
+    });
+
+    socket.on("call:offer", (data, callback) => {
+      handleCallOffer(socket, data, callback);
+    });
+
+    socket.on("call:answer", (data, callback) => {
+      handleCallAnswer(socket, data, callback);
     });
 
     socket.on("call:end", (data, callback) => {
       handleCallEnd(socket, data, callback);
     });
 
-    socket.on("call:timeout", (data, callback) => {
-      handleCallTimeout(socket, data, callback);
+    // =====================================================
+    // Group Events
+    // =====================================================
+
+    socket.on("group:create", (data, callback) => {
+      handleGroupCreate(socket, data, callback);
     });
 
-    socket.on("ice_candidate", (data, callback) => {
-      handleIceCandidate(socket, data, callback);
+    socket.on("group:join", (data, callback) => {
+      handleGroupJoin(socket, data, callback);
     });
 
-    socket.on("rtc_offer", (data, callback) => {
-      handleRtcOffer(socket, data, callback);
+    socket.on("group:leave", (data, callback) => {
+      handleGroupLeave(socket, data, callback);
     });
 
-    socket.on("rtc_answer", (data, callback) => {
-      handleRtcAnswer(socket, data, callback);
+    socket.on("group:message:send", (data, callback) => {
+      handleGroupSendMessage(socket, data, callback);
     });
 
     // =====================================================

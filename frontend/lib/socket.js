@@ -260,19 +260,27 @@ export const initiateCall = (data, callback) => {
 export const answerCall = (data, callback) => {
   const socket = getSocketFromGlobal();
   if (socket?.connected) {
-    socket.emit("call:answer", data, callback);
+    socket.emit("call:accept", data, callback);
   } else {
     callback({ success: false, error: "Socket not connected" });
   }
 };
 
+export const acceptCall = (data, callback) => {
+  return answerCall(data, callback);
+};
+
 export const declineCall = (data, callback) => {
   const socket = getSocketFromGlobal();
   if (socket?.connected) {
-    socket.emit("call:decline", data, callback);
+    socket.emit("call:reject", data, callback);
   } else {
     callback({ success: false, error: "Socket not connected" });
   }
+};
+
+export const rejectCall = (data, callback) => {
+  return declineCall(data, callback);
 };
 
 export const endCall = (data, callback) => {
@@ -285,22 +293,73 @@ export const endCall = (data, callback) => {
 export const sendIceCandidate = (data) => {
   const socket = getSocketFromGlobal();
   if (socket?.connected) {
-    socket.emit("ice_candidate", data);
+    socket.emit("call:ice-candidate", data);
   }
 };
 
 export const sendRtcOffer = (data) => {
   const socket = getSocketFromGlobal();
   if (socket?.connected) {
-    socket.emit("rtc_offer", data);
+    socket.emit("call:offer", data);
   }
 };
 
 export const sendRtcAnswer = (data) => {
   const socket = getSocketFromGlobal();
   if (socket?.connected) {
-    socket.emit("rtc_answer", data);
+    socket.emit("call:answer", data);
   }
+};
+
+// ============================================
+// Group Methods
+// ============================================
+export const createGroupSocket = (data, callback) => {
+  const socket = getSocketFromGlobal();
+  if (socket?.connected) {
+    socket.emit("group:create", data, callback);
+  } else if (typeof callback === "function") {
+    callback({ success: false, error: "Socket not connected" });
+  }
+};
+
+export const joinGroupRoom = (groupId, callback) => {
+  const socket = getSocketFromGlobal();
+  if (socket?.connected) {
+    socket.emit("group:join", { groupId }, callback);
+  } else if (typeof callback === "function") {
+    callback({ success: false, error: "Socket not connected" });
+  }
+};
+
+export const leaveGroupRoom = (groupId, callback) => {
+  const socket = getSocketFromGlobal();
+  if (socket?.connected) {
+    socket.emit("group:leave", { groupId }, callback);
+  } else if (typeof callback === "function") {
+    callback({ success: false, error: "Socket not connected" });
+  }
+};
+
+export const sendGroupMessage = (data, callback) => {
+  const socket = getSocketFromGlobal();
+  if (socket?.connected) {
+    socket.emit("group:message:send", data, callback);
+  } else if (typeof callback === "function") {
+    callback({ success: false, error: "Socket not connected" });
+  }
+};
+
+export const onUserInCall = (callback) => {
+  const socket = getSocketFromGlobal();
+  socket?.on("user:in-call", callback);
+  return () => socket?.off("user:in-call", callback);
+};
+
+export const onUserCallEnded = (callback) => {
+  const socket = getSocketFromGlobal();
+  socket?.on("user:call-ended", callback);
+  return () => socket?.off("user:call-ended", callback);
 };
 
 // ============================================
@@ -378,6 +437,30 @@ export const onConversationUpdated = (callback) => {
   return () => socket?.off("conversation:updated", callback);
 };
 
+export const onGroupMessageNew = (callback) => {
+  const socket = getSocketFromGlobal();
+  socket?.on("group:message:new", callback);
+  return () => socket?.off("group:message:new", callback);
+};
+
+export const onGroupUpdated = (callback) => {
+  const socket = getSocketFromGlobal();
+  socket?.on("group:updated", callback);
+  return () => socket?.off("group:updated", callback);
+};
+
+export const onGroupMemberAdded = (callback) => {
+  const socket = getSocketFromGlobal();
+  socket?.on("group:member:added", callback);
+  return () => socket?.off("group:member:added", callback);
+};
+
+export const onGroupMemberRemoved = (callback) => {
+  const socket = getSocketFromGlobal();
+  socket?.on("group:member:removed", callback);
+  return () => socket?.off("group:member:removed", callback);
+};
+
 export default {
   initSocket,
   getSocket,
@@ -401,6 +484,10 @@ export default {
   sendIceCandidate,
   sendRtcOffer,
   sendRtcAnswer,
+  createGroupSocket,
+  joinGroupRoom,
+  leaveGroupRoom,
+  sendGroupMessage,
   onNewMessage,
   onMessageDelivered,
   onMessageRead,
@@ -411,6 +498,12 @@ export default {
   onTypingStop,
   onUserOnline,
   onUserOffline,
+  onUserInCall,
+  onUserCallEnded,
   onConversationNew,
   onConversationUpdated,
+  onGroupMessageNew,
+  onGroupUpdated,
+  onGroupMemberAdded,
+  onGroupMemberRemoved,
 };

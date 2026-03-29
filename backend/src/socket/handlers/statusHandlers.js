@@ -5,9 +5,11 @@
 
 import User from "../../models/User.js";
 import Conversation from "../../models/Conversation.js";
+import Group from "../../models/Group.js";
 import { socketManager } from "../../utils/socketManager.js";
 import { logger } from "../../utils/helpers.js";
 import { handleSocketError } from "../../middleware/errorHandler.js";
+import { handleUserOfflineCallCleanup } from "./callHandlers.js";
 
 /**
  * Handle user connection
@@ -28,7 +30,7 @@ export const handleUserConnect = async (socket) => {
         status: "online",
         lastSeen: new Date(),
       },
-      { new: true }
+      { new: true },
     ).populate("contacts", "_id");
 
     if (!user) {
@@ -46,6 +48,16 @@ export const handleUserConnect = async (socket) => {
       socket.join(`conversation: ${conversation._id}`);
     }
 
+    // Join user's group rooms
+    const groups = await Group.find({
+      members: userId,
+      isActive: true,
+    }).select("_id");
+
+    for (const group of groups) {
+      socketManager.joinGroup(socket.id, group._id.toString());
+    }
+
     // Notify contacts that user is online
     if (user.contacts && user.contacts.length > 0) {
       const contactIds = user.contacts.map((c) => c._id.toString());
@@ -57,6 +69,7 @@ export const handleUserConnect = async (socket) => {
       userId,
       status: "online",
       conversationCount: conversations.length,
+      groupCount: groups.length,
     });
 
     logger.info(`User connected: ${user.username} (${socket.id})`);
@@ -79,13 +92,15 @@ export const handleUserDisconnect = async (socket) => {
 
     // Only update status if user has no more connections
     if (userWentOffline) {
+      await handleUserOfflineCallCleanup(userId);
+
       const user = await User.findByIdAndUpdate(
         userId,
         {
           status: "offline",
           lastSeen: new Date(),
         },
-        { new: true }
+        { new: true },
       ).populate("contacts", "_id");
 
       if (user && user.contacts && user.contacts.length > 0) {
@@ -96,7 +111,7 @@ export const handleUserDisconnect = async (socket) => {
       logger.info(`User disconnected: ${userId} (${socket.id})`);
     } else {
       logger.debug(
-        `Socket disconnected but user still has other connections: ${userId}`
+        `Socket disconnected but user still has other connections: ${userId}`,
       );
     }
   } catch (error) {
@@ -129,7 +144,7 @@ export const handleStatusUpdate = async (socket, data, callback) => {
         status,
         lastSeen: new Date(),
       },
-      { new: true }
+      { new: true },
     ).populate("contacts", "_id");
 
     if (!user) {
@@ -313,7 +328,7 @@ export const handleLeaveConversation = async (socket, data, callback) => {
     }
 
     logger.debug(
-      `User ${socket.userId} left conversation room ${conversationId}`
+      `User ${socket.userId} left conversation room ${conversationId}`,
     );
   } catch (error) {
     handleSocketError(socket, error, "conversation:leave");
