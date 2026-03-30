@@ -133,8 +133,8 @@ export function Dropdown({
                 style={{ top: position.top, left: position.left }}
                 className={cn(
                   "fixed z-[120] min-w-[210px] max-w-[calc(100vw-1rem)]",
-                  "bg-background/92 backdrop-blur-xl border border-border/75 rounded-2xl",
-                  "shadow-xl shadow-slate-900/15 overflow-hidden",
+                  "bg-[#0b1020]/95 text-zinc-100 backdrop-blur-xl border border-white/20 rounded-2xl",
+                  "shadow-2xl shadow-black/35 overflow-hidden",
                   className,
                 )}
                 onClick={() => setIsOpen(false)}
@@ -164,19 +164,19 @@ export function DropdownItem({
       disabled={disabled}
       className={cn(
         "w-full flex items-center gap-3 px-4 py-2.5 text-left rounded-none",
-        "text-sm transition-colors",
-        "hover:bg-background-secondary/75",
+        "text-sm text-zinc-100 transition-colors",
+        "hover:bg-white/10",
         "disabled:opacity-50 disabled:cursor-not-allowed",
-        isActive && "bg-background-secondary/75",
-        isDestructive && "text-red-500 hover:bg-red-500/10",
+        isActive && "bg-white/10",
+        isDestructive && "text-red-400 hover:bg-red-500/15 hover:text-red-300",
         className,
       )}
     >
       {icon && (
         <span
           className={cn(
-            "w-4 h-4 text-foreground-secondary",
-            isDestructive && "text-red-500",
+            "w-4 h-4 text-zinc-400",
+            isDestructive && "text-red-400",
           )}
         >
           {icon}
@@ -189,14 +189,14 @@ export function DropdownItem({
 }
 
 export function DropdownSeparator() {
-  return <div className="h-px bg-border/70 my-1" />;
+  return <div className="my-1 h-px bg-white/15" />;
 }
 
 export function DropdownLabel({ children, className }) {
   return (
     <div
       className={cn(
-        "px-4 py-2 text-xs font-semibold text-foreground-secondary uppercase tracking-wide",
+        "px-4 py-2 text-xs font-semibold text-zinc-400 uppercase tracking-wide",
         className,
       )}
     >

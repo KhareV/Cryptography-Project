@@ -163,9 +163,7 @@ export default function WalletConnectButton({ className = "" }) {
         <DropdownLabel>Connected Wallet</DropdownLabel>
 
         <div className="px-4 pb-2">
-          <p className="break-all text-xs text-foreground-secondary">
-            {address}
-          </p>
+          <p className="break-all text-xs text-zinc-400">{address}</p>
         </div>
 
         <DropdownItem

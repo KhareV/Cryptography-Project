@@ -474,11 +474,12 @@ router.post(
       throw new ApiError(403, "Only admins can add members");
     }
 
-    const member = await User.findById(memberId).select(
-      "_id username firstName lastName avatar status lastSeen",
-    );
+    const member = await User.findOne({
+      _id: memberId,
+      isActive: true,
+    }).select("_id username firstName lastName avatar status lastSeen");
 
-    if (!member || !member.isActive) {
+    if (!member) {
       throw new ApiError(404, "Member user not found");
     }
 

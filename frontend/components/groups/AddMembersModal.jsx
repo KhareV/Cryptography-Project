@@ -12,6 +12,17 @@ import { debounce } from "@/lib/utils";
 import { useAuth } from "@clerk/nextjs";
 import toast from "react-hot-toast";
 
+const OBJECT_ID_REGEX = /^[a-fA-F0-9]{24}$/;
+
+const normalizeMongoId = (value) => {
+  const normalized = String(value || "").trim();
+  return OBJECT_ID_REGEX.test(normalized) ? normalized : "";
+};
+
+const getMemberMongoId = (member) => {
+  return normalizeMongoId(member?._id) || normalizeMongoId(member?.id) || "";
+};
+
 export default function AddMembersModal({
   isOpen,
   onClose,
@@ -26,7 +37,9 @@ export default function AddMembersModal({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const existingIds = new Set(
-    (existingMembers || []).map((member) => member.id || member._id),
+    (existingMembers || [])
+      .map((member) => getMemberMongoId(member))
+      .filter(Boolean),
   );
 
   const searchUsers = useCallback(
@@ -44,7 +57,10 @@ export default function AddMembersModal({
         const response = await userAPI.searchUsers(value.trim());
         const users = response.data?.users || [];
         setResults(
-          users.filter((user) => !existingIds.has(user.id || user._id)),
+          users.filter((user) => {
+            const mongoId = getMemberMongoId(user);
+            return Boolean(mongoId) && !existingIds.has(mongoId);
+          }),
         );
       } catch (error) {
         toast.error("Failed to search users");
@@ -56,13 +72,13 @@ export default function AddMembersModal({
   );
 
   const toggleUser = (user) => {
-    const userId = user.id || user._id;
+    const userId = getMemberMongoId(user);
     if (!userId) return;
 
     setSelected((prev) => {
-      const exists = prev.some((item) => (item.id || item._id) === userId);
+      const exists = prev.some((item) => getMemberMongoId(item) === userId);
       if (exists) {
-        return prev.filter((item) => (item.id || item._id) !== userId);
+        return prev.filter((item) => getMemberMongoId(item) !== userId);
       }
       return [...prev, user];
     });
@@ -74,19 +90,32 @@ export default function AddMembersModal({
       return;
     }
 
+    const memberIds = selected
+      .map((user) => getMemberMongoId(user))
+      .filter(Boolean);
+
+    if (!memberIds.length) {
+      toast.error("No valid members selected");
+      return;
+    }
+
     try {
       setIsSubmitting(true);
-      await onAddMembers(selected.map((user) => user.id || user._id));
+      await onAddMembers(memberIds);
       setSelected([]);
       setResults([]);
       setQuery("");
       onClose();
+    } catch (error) {
+      toast.error(error?.message || "Failed to add member");
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const selectedIds = new Set(selected.map((item) => item.id || item._id));
+  const selectedIds = new Set(
+    selected.map((item) => getMemberMongoId(item)).filter(Boolean),
+  );
 
   return (
     <Modal
@@ -120,7 +149,7 @@ export default function AddMembersModal({
             ) : results.length > 0 ? (
               <div className="p-2 space-y-1">
                 {results.map((user) => {
-                  const userId = user.id || user._id;
+                  const userId = getMemberMongoId(user);
                   const isSelected = selectedIds.has(userId);
 
                   return (
