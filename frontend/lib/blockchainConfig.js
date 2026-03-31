@@ -8,7 +8,8 @@ export const BLOCKCHAIN_CONFIG = {
   chainHex: SEPOLIA_CHAIN_HEX,
   networkName: "sepolia",
   rpcUrl:
-    process.env.NEXT_PUBLIC_BLOCKCHAIN_RPC_URL || "https://rpc.sepolia.org",
+    process.env.NEXT_PUBLIC_BLOCKCHAIN_RPC_URL ||
+    "https://ethereum-sepolia-rpc.publicnode.com",
   keyRegistryAddress: contractAddresses.keyRegistry,
   communityAddress: contractAddresses.community,
   anchorAddress: contractAddresses.anchor,

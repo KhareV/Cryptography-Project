@@ -304,7 +304,9 @@ export default function GroupInfoPanel({
             <section className="rounded-3xl border border-border/70 bg-background/90 shadow-sm p-3">
               <div className="space-y-2">
                 <p className="text-xs text-foreground-secondary rounded-xl border border-border/70 bg-background p-3">
-                  Admins can invite members directly for free using Add Members.
+                  {isPaidGroup
+                    ? "Paid communities require on-chain paid join from each member."
+                    : "Admins can invite members directly for free using Add Members."}
                 </p>
 
                 <Button
@@ -312,15 +314,20 @@ export default function GroupInfoPanel({
                   size="sm"
                   className="w-full rounded-xl"
                   onClick={onOpenAddMembers}
+                  disabled={isPaidGroup}
                   leftIcon={<UserPlus className="w-4 h-4" />}
                 >
-                  Add Members
+                  {isPaidGroup ? "Paid Join Required" : "Add Members"}
                 </Button>
 
                 {isPaidGroup && (
                   <div className="rounded-2xl border border-border/70 bg-background p-3 space-y-2">
                     <p className="text-xs text-foreground-secondary">
                       Join fee: {Number(group.joinFeeEth).toFixed(3)} ETH
+                    </p>
+                    <p className="text-xs text-foreground-secondary">
+                      Members must join from Discover/Groups and complete the
+                      wallet payment.
                     </p>
                     <p
                       className={`text-xs font-semibold ${

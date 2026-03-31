@@ -55,7 +55,7 @@ export default function ChatHeader({
       : "Start audio call";
 
   return (
-    <header className="flex items-center gap-3 px-4 py-3 border-b border-border/70 bg-background/90 backdrop-blur">
+    <header className="relative z-30 flex items-center gap-3 px-4 py-3 border-b border-border/70 bg-background/90 backdrop-blur">
       {/* Back Button (Mobile) */}
       {showBackButton && (
         <Button

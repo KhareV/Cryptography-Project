@@ -28,6 +28,7 @@ import Message from "../models/Message.js";
 import User from "../models/User.js";
 import { socketManager } from "../utils/socketManager.js";
 import {
+  getOnChainCommunityMembership,
   verifyCreateCommunityTx,
   verifyJoinCommunityTx,
 } from "../utils/blockchainVerify.js";
@@ -402,12 +403,30 @@ router.post(
       );
     }
 
-    await verifyJoinCommunityTx({
-      txHash: joinTxHash,
-      groupId,
-      walletAddress,
-      joinFeeEth,
-    });
+    let joinVia = "paid-join";
+
+    if (joinTxHash) {
+      await verifyJoinCommunityTx({
+        txHash: joinTxHash,
+        groupId,
+        walletAddress,
+        joinFeeEth,
+      });
+    } else {
+      const isMemberOnChain = await getOnChainCommunityMembership(
+        groupId,
+        walletAddress,
+      );
+
+      if (!isMemberOnChain) {
+        throw new ApiError(
+          409,
+          "On-chain payment proof missing. Complete paid join transaction first.",
+        );
+      }
+
+      joinVia = "paid-join-recovered";
+    }
 
     group.members.push(userId);
     await group.save();
@@ -434,7 +453,7 @@ router.post(
       memberId: userId.toString(),
       addedBy: userId.toString(),
       timestamp: new Date().toISOString(),
-      via: "paid-join",
+      via: joinVia,
     });
 
     socketManager.emitToUser(userId, "group:updated", {
@@ -472,6 +491,13 @@ router.post(
 
     if (!group.isAdmin(userId)) {
       throw new ApiError(403, "Only admins can add members");
+    }
+
+    if (Number(group.joinFeeEth || 0) > 0) {
+      throw new ApiError(
+        409,
+        "Paid communities do not support free admin invites. Members must join via paid on-chain join.",
+      );
     }
 
     const member = await User.findOne({

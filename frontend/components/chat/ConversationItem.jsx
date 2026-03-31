@@ -70,9 +70,14 @@ export default function ConversationItem({ conversation }) {
       {/* Content */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between mb-1">
-          <h3 className="font-semibold truncate text-foreground">
-            {displayName}
-          </h3>
+          <div className="flex items-center gap-2 min-w-0">
+            <h3 className="font-semibold truncate text-foreground">
+              {displayName}
+            </h3>
+            <span className="shrink-0 rounded-full bg-sky-500/15 px-2 py-0.5 text-[10px] font-semibold text-sky-500">
+              1:1
+            </span>
+          </div>
           <span className="text-xs text-foreground-secondary flex-shrink-0 ml-2">
             {previewTimestamp && formatConversationTime(previewTimestamp)}
           </span>

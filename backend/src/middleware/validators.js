@@ -314,6 +314,7 @@ export const validateGroupJoin = [
     .matches(/^0x[a-fA-F0-9]{40}$/)
     .withMessage("walletAddress must be a valid Ethereum address"),
   body("joinTxHash")
+    .optional({ nullable: true, checkFalsy: true })
     .isString()
     .matches(/^0x[a-fA-F0-9]{64}$/)
     .withMessage("joinTxHash must be a valid transaction hash"),

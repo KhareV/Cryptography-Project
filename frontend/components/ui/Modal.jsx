@@ -1,6 +1,7 @@
 "use client";
 
-import { Fragment, useEffect } from "react";
+import { Fragment, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -26,6 +27,12 @@ export function Modal({
   closeOnOverlayClick = true,
   className,
 }) {
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
   // Handle escape key
   useEffect(() => {
     const handleEscape = (e) => {
@@ -59,7 +66,7 @@ export function Modal({
     full: "max-w-[95vw]",
   };
 
-  return (
+  const modalNode = (
     <AnimatePresence>
       {isOpen && (
         <Fragment>
@@ -70,12 +77,12 @@ export function Modal({
             exit="hidden"
             variants={overlayVariants}
             transition={{ duration: 0.2 }}
-            className="fixed inset-0 z-50 bg-slate-950/45 backdrop-blur-sm"
+            className="fixed inset-0 z-[120] bg-slate-950/45 backdrop-blur-sm"
             onClick={closeOnOverlayClick ? onClose : undefined}
           />
 
           {/* Modal */}
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-[121] flex items-center justify-center p-4">
             <motion.div
               initial="hidden"
               animate="visible"
@@ -126,6 +133,12 @@ export function Modal({
       )}
     </AnimatePresence>
   );
+
+  if (!isMounted) {
+    return null;
+  }
+
+  return createPortal(modalNode, document.body);
 }
 
 export function ModalFooter({ children, className }) {

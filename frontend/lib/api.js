@@ -2,14 +2,21 @@ import axios from "axios";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
+const DEFAULT_API_TIMEOUT_MS = 10000;
+const BLOCKCHAIN_API_TIMEOUT_MS = 30000;
+
+const createApiClient = (timeout) =>
+  axios.create({
+    baseURL: `${API_URL}/api`,
+    timeout,
+    headers: {
+      "Content-Type": "application/json",
+    },
+  });
+
 // Create axios instance
-const api = axios.create({
-  baseURL: `${API_URL}/api`,
-  timeout: 10000,
-  headers: {
-    "Content-Type": "application/json",
-  },
-});
+const api = createApiClient(DEFAULT_API_TIMEOUT_MS);
+const blockchainApi = createApiClient(BLOCKCHAIN_API_TIMEOUT_MS);
 
 // Token storage for client-side
 let authToken = null;
@@ -36,10 +43,37 @@ api.interceptors.request.use(
   },
 );
 
+blockchainApi.interceptors.request.use(
+  (config) => {
+    if (authToken) {
+      config.headers.Authorization = `Bearer ${authToken}`;
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  },
+);
+
 /**
  * Response interceptor for error handling
  */
 api.interceptors.response.use(
+  (response) => response.data,
+  (error) => {
+    const message =
+      error.response?.data?.error || error.message || "An error occurred";
+
+    // Log error in development
+    if (process.env.NODE_ENV === "development") {
+      console.error("API Error:", message);
+    }
+
+    return Promise.reject(new Error(message));
+  },
+);
+
+blockchainApi.interceptors.response.use(
   (response) => response.data,
   (error) => {
     const message =
@@ -166,9 +200,9 @@ export const groupAPI = {
 // Blockchain Key API
 // ============================================
 export const keyAPI = {
-  register: (payload) => api.post("/keys/register", payload),
-  getMyStatus: () => api.get("/keys/status/me"),
-  getStatus: (userId) => api.get(`/keys/status/${userId}`),
+  register: (payload) => blockchainApi.post("/keys/register", payload),
+  getMyStatus: () => blockchainApi.get("/keys/status/me"),
+  getStatus: (userId) => blockchainApi.get(`/keys/status/${userId}`),
 };
 
 // ============================================
@@ -176,14 +210,16 @@ export const keyAPI = {
 // ============================================
 export const anchorAPI = {
   getConversationAnchor: (conversationId) =>
-    api.get(`/anchor/conversation/${conversationId}`),
-  getGroupAnchor: (groupId) => api.get(`/anchor/group/${groupId}`),
+    blockchainApi.get(`/anchor/conversation/${conversationId}`),
+  getGroupAnchor: (groupId) => blockchainApi.get(`/anchor/group/${groupId}`),
   anchorConversationNow: (conversationId) =>
-    api.post(`/anchor/conversation/${conversationId}/now`),
-  anchorGroupNow: (groupId) => api.post(`/anchor/group/${groupId}/now`),
+    blockchainApi.post(`/anchor/conversation/${conversationId}/now`),
+  anchorGroupNow: (groupId) =>
+    blockchainApi.post(`/anchor/group/${groupId}/now`),
   verifyConversation: (conversationId) =>
-    api.get(`/anchor/conversation/${conversationId}/verify`),
-  verifyGroup: (groupId) => api.get(`/anchor/group/${groupId}/verify`),
+    blockchainApi.get(`/anchor/conversation/${conversationId}/verify`),
+  verifyGroup: (groupId) =>
+    blockchainApi.get(`/anchor/group/${groupId}/verify`),
 };
 
 export default api;

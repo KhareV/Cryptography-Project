@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import {
   CheckCircle2,
@@ -113,6 +113,26 @@ const getBlockchainWriteErrorMessage = (error) => {
   return "Transaction failed on-chain. Please retry.";
 };
 
+const withTimeout = async (promise, timeoutMs = 9000) => {
+  let timeoutId;
+
+  try {
+    return await Promise.race([
+      promise,
+      new Promise((_, reject) => {
+        timeoutId = setTimeout(
+          () => reject(new Error("Request timed out")),
+          timeoutMs,
+        );
+      }),
+    ]);
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  }
+};
+
 export default function BlockchainDashboardPage() {
   const { getToken } = useAuth();
   const { user: appUser, setMobileView, isMobileView } = useStore();
@@ -149,6 +169,7 @@ export default function BlockchainDashboardPage() {
   const [isGroupChainLoading, setIsGroupChainLoading] = useState(false);
   const [withdrawTarget, setWithdrawTarget] = useState(null);
   const [isWithdrawing, setIsWithdrawing] = useState(false);
+  const isGroupChainLoadInFlightRef = useRef(false);
 
   const [transactions, setTransactions] = useState([]);
   const [isTxLoading, setIsTxLoading] = useState(false);
@@ -348,74 +369,113 @@ export default function BlockchainDashboardPage() {
     }
   }, [appUser?.id, isConnected, address, isCorrectNetwork, loadKeyStatus]);
 
-  const loadGroupChainData = useCallback(async () => {
-    if (!groups.length) {
-      setGroupChainData({});
-      return;
-    }
+  const loadGroupChainData = useCallback(
+    async (options = {}) => {
+      const { silent = false } = options;
 
-    setIsGroupChainLoading(true);
-    try {
-      const entries = await Promise.all(
-        groups.map(async (group) => {
-          if (!group.onChainRegistered) {
-            return [
-              group.id,
-              {
-                joinFeeEth: Number(group.joinFeeEth || 0),
-                totalFeesEth: "0.0000",
-                pendingWithdrawalEth: "0.0000",
-                adminAddress: "",
-                memberStatus: false,
-                joinedAt: 0,
-                paidEth:
-                  Number(group.joinFeeEth || 0) > 0
-                    ? Number(group.joinFeeEth).toFixed(4)
-                    : "0",
-              },
-            ];
-          }
+      if (!groups.length) {
+        setGroupChainData({});
+        if (!silent) {
+          setIsGroupChainLoading(false);
+        }
+        return;
+      }
 
-          const snapshot = await getCommunitySnapshotOnChain({
-            groupId: group.id,
-          });
-          let membership = null;
-          if (address && ethers.isAddress(address)) {
-            membership = await getCommunityMembershipOnChain({
-              groupId: group.id,
-              walletAddress: address,
-            });
-          }
+      if (isGroupChainLoadInFlightRef.current) {
+        return;
+      }
 
-          return [
-            group.id,
-            {
-              joinFeeEth: Number(ethers.formatEther(snapshot.joinFeeWei || 0n)),
-              totalFeesEth: formatEthValue(snapshot.totalFeesCollected),
-              pendingWithdrawalEth: formatEthValue(snapshot.pendingWithdrawal),
-              pendingWithdrawalWei: snapshot.pendingWithdrawal,
-              adminAddress: snapshot.admin,
-              memberStatus: Boolean(membership?.memberStatus),
-              joinedAt: Number(membership?.joinedAt || 0),
-              paidEth: membership?.paidAmountWei
-                ? Number(ethers.formatEther(membership.paidAmountWei)).toFixed(
-                    4,
-                  )
-                : Number(group.joinFeeEth || 0) > 0
+      isGroupChainLoadInFlightRef.current = true;
+
+      if (!silent) {
+        setIsGroupChainLoading(true);
+      }
+
+      try {
+        const entries = await Promise.all(
+          groups.map(async (group) => {
+            const baseEntry = {
+              joinFeeEth: Number(group.joinFeeEth || 0),
+              totalFeesEth: "0.0000",
+              pendingWithdrawalEth: "0.0000",
+              adminAddress: "",
+              memberStatus: false,
+              joinedAt: 0,
+              paidEth:
+                Number(group.joinFeeEth || 0) > 0
                   ? Number(group.joinFeeEth).toFixed(4)
                   : "0",
-            },
-          ];
-        }),
-      );
+              readError: false,
+            };
 
-      setGroupChainData(Object.fromEntries(entries));
-    } catch {
-      setGroupChainData({});
-    } finally {
-      setIsGroupChainLoading(false);
-    }
-  }, [groups, address]);
+            if (!group.onChainRegistered) {
+              return [group.id, baseEntry];
+            }
+
+            try {
+              const snapshot = await withTimeout(
+                getCommunitySnapshotOnChain({
+                  groupId: group.id,
+                }),
+              );
+              let membership = null;
+              if (address && ethers.isAddress(address)) {
+                membership = await withTimeout(
+                  getCommunityMembershipOnChain({
+                    groupId: group.id,
+                    walletAddress: address,
+                  }),
+                );
+              }
+
+              return [
+                group.id,
+                {
+                  joinFeeEth: Number(
+                    ethers.formatEther(snapshot.joinFeeWei || 0n),
+                  ),
+                  totalFeesEth: formatEthValue(snapshot.totalFeesCollected),
+                  pendingWithdrawalEth: formatEthValue(
+                    snapshot.pendingWithdrawal,
+                  ),
+                  pendingWithdrawalWei: snapshot.pendingWithdrawal,
+                  adminAddress: snapshot.admin,
+                  memberStatus: Boolean(membership?.memberStatus),
+                  joinedAt: Number(membership?.joinedAt || 0),
+                  paidEth: membership?.paidAmountWei
+                    ? Number(
+                        ethers.formatEther(membership.paidAmountWei),
+                      ).toFixed(4)
+                    : Number(group.joinFeeEth || 0) > 0
+                      ? Number(group.joinFeeEth).toFixed(4)
+                      : "0",
+                  readError: false,
+                },
+              ];
+            } catch {
+              return [
+                group.id,
+                {
+                  ...baseEntry,
+                  readError: true,
+                },
+              ];
+            }
+          }),
+        );
+
+        setGroupChainData(Object.fromEntries(entries));
+      } catch {
+        setGroupChainData({});
+      } finally {
+        isGroupChainLoadInFlightRef.current = false;
+        if (!silent) {
+          setIsGroupChainLoading(false);
+        }
+      }
+    },
+    [groups, address],
+  );
 
   const loadAnchorStatus = useCallback(async () => {
     if (!conversations.length && !groups.length) {
@@ -702,6 +762,13 @@ export default function BlockchainDashboardPage() {
   }, [loadGroupChainData]);
 
   useEffect(() => {
+    const interval = setInterval(() => {
+      loadGroupChainData({ silent: true });
+    }, 20_000);
+    return () => clearInterval(interval);
+  }, [loadGroupChainData]);
+
+  useEffect(() => {
     loadAnchorStatus();
   }, [loadAnchorStatus]);
 
@@ -942,9 +1009,19 @@ export default function BlockchainDashboardPage() {
           </section>
 
           <section className="rounded-3xl border border-border/70 bg-background/95 p-5 shadow-sm">
-            <h2 className="mb-4 text-lg font-semibold text-foreground">
-              My Groups (on-chain)
-            </h2>
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <h2 className="text-lg font-semibold text-foreground">
+                My Groups (on-chain)
+              </h2>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={loadGroupChainData}
+                isLoading={isGroupChainLoading}
+              >
+                Refresh
+              </Button>
+            </div>
             <div className="mb-4 inline-flex rounded-2xl border border-border/70 bg-background-secondary/40 p-1">
               <button
                 type="button"
@@ -980,8 +1057,46 @@ export default function BlockchainDashboardPage() {
                 {(groupTab === "admin" ? adminGroups : groupsIn).map(
                   (group) => {
                     const chain = groupChainData[group.id] || {};
-                    const canWithdraw =
-                      Number(chain.pendingWithdrawalEth || "0") > 0;
+                    const pendingWithdrawal = Number(
+                      chain.pendingWithdrawalEth || "0",
+                    );
+
+                    const normalizedConnectedWallet =
+                      address && ethers.isAddress(address)
+                        ? ethers.getAddress(address)
+                        : "";
+                    const normalizedOnChainAdmin =
+                      chain.adminAddress && ethers.isAddress(chain.adminAddress)
+                        ? ethers.getAddress(chain.adminAddress)
+                        : "";
+
+                    const adminWalletMismatch = Boolean(
+                      normalizedConnectedWallet &&
+                      normalizedOnChainAdmin &&
+                      normalizedConnectedWallet !== normalizedOnChainAdmin,
+                    );
+
+                    let withdrawDisabledReason = "";
+                    if (!group.onChainRegistered) {
+                      withdrawDisabledReason =
+                        "Register this group on-chain first.";
+                    } else if (chain.readError) {
+                      withdrawDisabledReason =
+                        "Could not read this group's on-chain state. Click Refresh.";
+                    } else if (!isConnected || !address) {
+                      withdrawDisabledReason =
+                        "Connect your wallet to withdraw fees.";
+                    } else if (!isCorrectNetwork) {
+                      withdrawDisabledReason =
+                        "Switch wallet network to Sepolia.";
+                    } else if (adminWalletMismatch) {
+                      withdrawDisabledReason = `Connect on-chain admin wallet (${truncate(normalizedOnChainAdmin)}).`;
+                    } else if (pendingWithdrawal <= 0) {
+                      withdrawDisabledReason =
+                        "No paid joins yet. Anchoring does not create withdrawable fees.";
+                    }
+
+                    const canWithdraw = !withdrawDisabledReason;
 
                     return (
                       <div
@@ -1023,6 +1138,11 @@ export default function BlockchainDashboardPage() {
                               {chain.pendingWithdrawalEth || "0.0000"} ETH
                               available
                             </p>
+                            {!canWithdraw && (
+                              <p className="mt-1 text-xs text-amber-500">
+                                {withdrawDisabledReason}
+                              </p>
+                            )}
                           </div>
                         ) : (
                           <div className="flex-1 text-sm text-foreground-secondary md:px-4">
@@ -1047,6 +1167,11 @@ export default function BlockchainDashboardPage() {
                               variant={canWithdraw ? "primary" : "secondary"}
                               size="sm"
                               disabled={!canWithdraw}
+                              title={
+                                canWithdraw
+                                  ? "Withdraw collected join fees"
+                                  : withdrawDisabledReason
+                              }
                               onClick={() =>
                                 setWithdrawTarget({
                                   id: group.id,

@@ -12,7 +12,6 @@ import {
   anchorGroup,
   getAnchorHashesForMessages,
   getLatestAnchor,
-  getLatestAnchorEvent,
 } from "../utils/merkleAnchor.js";
 import { computeMerkleRoot } from "../utils/merkleTree.js";
 
@@ -295,10 +294,9 @@ router.get(
       throw new ApiError(403, "Not a participant in this conversation");
     }
 
-    const [messages, chainAnchor, chainAnchorEvent] = await Promise.all([
+    const [messages, chainAnchor] = await Promise.all([
       fetchConversationMessages(id),
       getLatestAnchor(id),
-      getLatestAnchorEvent(id),
     ]);
 
     const computedMerkleRoot = computeMerkleRoot(
@@ -310,7 +308,7 @@ router.get(
       chainAnchor,
       localAnchor: conversation.lastAnchor,
       messageCount: messages.length,
-      fallbackTxHash: chainAnchorEvent?.txHash || "",
+      fallbackTxHash: "",
     });
 
     sendSuccess(res, 200, "Conversation verification complete", verification);
@@ -336,10 +334,9 @@ router.get(
       throw new ApiError(403, "You are not a member of this group");
     }
 
-    const [messages, chainAnchor, chainAnchorEvent] = await Promise.all([
+    const [messages, chainAnchor] = await Promise.all([
       fetchGroupMessages(id),
       getLatestAnchor(id),
-      getLatestAnchorEvent(id),
     ]);
 
     const computedMerkleRoot = computeMerkleRoot(
@@ -351,7 +348,7 @@ router.get(
       chainAnchor,
       localAnchor: group.lastAnchor,
       messageCount: messages.length,
-      fallbackTxHash: chainAnchorEvent?.txHash || "",
+      fallbackTxHash: "",
     });
 
     sendSuccess(res, 200, "Group verification complete", verification);

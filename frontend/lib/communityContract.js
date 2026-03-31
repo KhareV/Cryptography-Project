@@ -49,6 +49,55 @@ const getReadOnlyCommunityContract = () => {
   );
 };
 
+const getReadProviders = () => {
+  const candidates = Array.from(
+    new Set([
+      BLOCKCHAIN_CONFIG.rpcUrl,
+      "https://ethereum-sepolia-rpc.publicnode.com",
+      "https://sepolia.drpc.org",
+      "https://rpc.sepolia.org",
+    ]),
+  ).filter(Boolean);
+
+  const providers = candidates.map(
+    (rpcUrl) => new ethers.JsonRpcProvider(rpcUrl, BLOCKCHAIN_CONFIG.chainId),
+  );
+
+  if (typeof window !== "undefined" && window.ethereum) {
+    providers.push(new ethers.BrowserProvider(window.ethereum));
+  }
+
+  return providers;
+};
+
+const withReadFallback = async (reader) => {
+  const providers = getReadProviders();
+  let lastError = null;
+
+  for (const provider of providers) {
+    try {
+      const network = await provider.getNetwork();
+      if (Number(network.chainId) !== BLOCKCHAIN_CONFIG.chainId) {
+        continue;
+      }
+
+      const contract = new ethers.Contract(
+        BLOCKCHAIN_CONFIG.communityAddress,
+        communityAbi,
+        provider,
+      );
+
+      return await reader(contract, provider);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw (
+    lastError || new Error("Unable to read on-chain community state right now")
+  );
+};
+
 export const createCommunityOnChain = async ({ groupId, joinFeeEth }) => {
   const contract = await getCommunityContract();
   const joinFeeWei = ethers.parseEther(String(joinFeeEth || 0));
@@ -92,14 +141,13 @@ export const checkCommunityMembershipOnChain = async ({
 };
 
 export const getCommunitySnapshotOnChain = async ({ groupId }) => {
-  const contract = getReadOnlyCommunityContract();
   const [
     joinFeeWei,
     memberCount,
     admin,
     pendingWithdrawal,
     totalFeesCollected,
-  ] = await contract.getCommunity(groupId);
+  ] = await withReadFallback((contract) => contract.getCommunity(groupId));
 
   return {
     joinFeeWei,
@@ -114,10 +162,8 @@ export const getCommunityMembershipOnChain = async ({
   groupId,
   walletAddress,
 }) => {
-  const contract = getReadOnlyCommunityContract();
-  const [memberStatus, joinedAt, paidAmountWei] = await contract.getMembership(
-    groupId,
-    walletAddress,
+  const [memberStatus, joinedAt, paidAmountWei] = await withReadFallback(
+    (contract) => contract.getMembership(groupId, walletAddress),
   );
 
   return {
@@ -144,35 +190,35 @@ export const findCommunityCreateTxHashOnChain = async ({
 }) => {
   if (!groupId) return "";
 
-  const contract = getReadOnlyCommunityContract();
-  const provider = contract.runner;
-  const latestBlock = await provider.getBlockNumber();
-  const fromBlock = Math.max(0, latestBlock - 1_500_000);
-
   const normalizedAdmin =
     adminAddress && ethers.isAddress(adminAddress)
       ? ethers.getAddress(adminAddress)
       : null;
 
-  let events = [];
+  return withReadFallback(async (contract, provider) => {
+    const latestBlock = await provider.getBlockNumber();
+    const fromBlock = Math.max(0, latestBlock - 1_500_000);
 
-  if (normalizedAdmin) {
-    const strictFilter = contract.filters.CommunityCreated(
-      groupId,
-      normalizedAdmin,
-    );
-    events = await contract.queryFilter(strictFilter, fromBlock, "latest");
-  }
+    let events = [];
 
-  if (!events.length) {
-    const relaxedFilter = contract.filters.CommunityCreated(groupId, null);
-    events = await contract.queryFilter(relaxedFilter, fromBlock, "latest");
-  }
+    if (normalizedAdmin) {
+      const strictFilter = contract.filters.CommunityCreated(
+        groupId,
+        normalizedAdmin,
+      );
+      events = await contract.queryFilter(strictFilter, fromBlock, "latest");
+    }
 
-  if (!events.length) {
-    return "";
-  }
+    if (!events.length) {
+      const relaxedFilter = contract.filters.CommunityCreated(groupId, null);
+      events = await contract.queryFilter(relaxedFilter, fromBlock, "latest");
+    }
 
-  const event = events[0];
-  return event?.transactionHash || event?.log?.transactionHash || "";
+    if (!events.length) {
+      return "";
+    }
+
+    const event = events[0];
+    return event?.transactionHash || event?.log?.transactionHash || "";
+  });
 };

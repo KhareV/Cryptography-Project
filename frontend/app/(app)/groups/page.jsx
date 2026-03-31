@@ -13,7 +13,10 @@ import GroupList from "@/components/groups/GroupList";
 import CreateGroupModal from "@/components/groups/CreateGroupModal";
 import JoinCommunityModal from "@/components/groups/JoinCommunityModal";
 import Sidebar from "@/components/chat/Sidebar";
-import { joinCommunityOnChain } from "@/lib/communityContract";
+import {
+  checkCommunityMembershipOnChain,
+  joinCommunityOnChain,
+} from "@/lib/communityContract";
 import toast from "react-hot-toast";
 
 export default function GroupsPage() {
@@ -98,6 +101,29 @@ export default function GroupsPage() {
     try {
       setIsJoiningPaid(true);
       const fee = Number(joinTarget.joinFeeEth || 0);
+
+      const alreadyMemberOnChain = await checkCommunityMembershipOnChain({
+        groupId: joinTarget.id,
+        walletAddress: address,
+      });
+
+      if (alreadyMemberOnChain) {
+        const joined = await joinGroup(joinTarget.id, {
+          walletAddress: address,
+        });
+
+        toast.success(
+          "Wallet already joined on-chain. Synced membership without re-paying.",
+        );
+        setJoinTarget(null);
+
+        if (joined?.id) {
+          router.push(`/groups/${joined.id}`);
+        }
+
+        return;
+      }
+
       const { txHash } = await joinCommunityOnChain({
         groupId: joinTarget.id,
         joinFeeEth: fee,
@@ -114,6 +140,32 @@ export default function GroupsPage() {
         router.push(`/groups/${joined.id}`);
       }
     } catch (error) {
+      const raw = String(
+        error?.reason || error?.shortMessage || error?.message || "",
+      ).toLowerCase();
+
+      if (raw.includes("already joined")) {
+        try {
+          const joined = await joinGroup(joinTarget.id, {
+            walletAddress: address,
+          });
+
+          toast.success(
+            "Detected existing on-chain membership. Synced group access.",
+          );
+          setJoinTarget(null);
+
+          if (joined?.id) {
+            router.push(`/groups/${joined.id}`);
+          }
+
+          return;
+        } catch (syncError) {
+          toast.error(syncError.message || "Failed to sync paid membership.");
+          return;
+        }
+      }
+
       toast.error(error.message || "Failed to complete paid join.");
     } finally {
       setIsJoiningPaid(false);

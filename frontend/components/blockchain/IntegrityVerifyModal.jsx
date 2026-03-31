@@ -26,6 +26,35 @@ const truncateHash = (value, size = 14) => {
   return `${value.slice(0, size)}...${value.slice(-8)}`;
 };
 
+const getFriendlyFailReason = (value) => {
+  const raw = String(value || "").trim();
+  const normalized = raw.toLowerCase();
+
+  if (!raw) {
+    return {
+      summary: "Verification failed due to an unknown error.",
+      showRaw: false,
+    };
+  }
+
+  if (
+    normalized.includes("could not coalesce error") ||
+    normalized.includes("missing response for request") ||
+    normalized.includes("timed out")
+  ) {
+    return {
+      summary:
+        "Blockchain RPC provider timed out while fetching anchor logs. Please retry in a few seconds.",
+      showRaw: true,
+    };
+  }
+
+  return {
+    summary: raw,
+    showRaw: false,
+  };
+};
+
 export default function IntegrityVerifyModal({
   isOpen,
   onClose,
@@ -112,6 +141,15 @@ export default function IntegrityVerifyModal({
     }
     return "Messages have not been anchored yet";
   }, [result, stage]);
+
+  const failReasonDisplay = useMemo(
+    () => getFriendlyFailReason(result?.failReason),
+    [result?.failReason],
+  );
+
+  const failedStateHint = failReasonDisplay.showRaw
+    ? "Verification could not complete because the RPC provider rejected the request range. Retry shortly or use a stronger RPC plan."
+    : "This could indicate messages have been modified or deleted by the server.";
 
   const handleCopy = async (value, label) => {
     if (!value) return;
@@ -292,17 +330,22 @@ export default function IntegrityVerifyModal({
             <p className="font-mono text-xs break-all">
               {result?.chainMerkleRoot || "n/a"}
             </p>
-            {result?.failReason && (
-              <p className="text-xs text-red-500">
-                Reason: {result.failReason}
-              </p>
+            <p className="text-xs text-red-500 break-words">
+              Reason: {failReasonDisplay.summary}
+            </p>
+            {failReasonDisplay.showRaw && result?.failReason && (
+              <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-2">
+                <p className="text-[11px] font-semibold text-red-500">
+                  Technical details
+                </p>
+                <p className="mt-1 max-h-24 overflow-y-auto font-mono text-[11px] text-red-500/90 break-all whitespace-pre-wrap">
+                  {result.failReason}
+                </p>
+              </div>
             )}
           </div>
 
-          <p className="text-sm text-foreground-secondary">
-            This could indicate messages have been modified or deleted by the
-            server.
-          </p>
+          <p className="text-sm text-foreground-secondary">{failedStateHint}</p>
 
           <div className="flex items-center justify-end gap-2">
             <Button variant="secondary" onClick={handleReport}>
