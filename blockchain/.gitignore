@@ -13,3 +13,12 @@ ignition/deployments/
 
 # Misc
 *.log
+
+# Environment files
+.env
+.env.*
+.env.local
+.env.development
+.env.production
+.env.test
+.env.example

@@ -20,3 +20,12 @@ thumb
 sketch
 
 # End of https://mrkandreev.name/snippets/gitignore-generator/#react
+
+# Environment files
+.env
+.env.*
+.env.local
+.env.development
+.env.production
+.env.test
+.env.example
